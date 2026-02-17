@@ -1,0 +1,40 @@
+services:
+  # ─────────────────────────────────────────────
+  # rdxclaw Agent (one-shot query)
+  #   docker compose run --rm rdxclaw-agent -m "Hello"
+  # ─────────────────────────────────────────────
+  rdxclaw-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rdxclaw-agent
+    profiles:
+      - agent
+    volumes:
+      - ./config/config.json:/root/.rdxclaw/config.json:ro
+      - rdxclaw-workspace:/root/.rdxclaw/workspace
+    entrypoint: ["rdxclaw", "agent"]
+    stdin_open: true
+    tty: true
+
+  # ─────────────────────────────────────────────
+  # rdxclaw Gateway (Long-running Bot)
+  #   docker compose up rdxclaw-gateway
+  # ─────────────────────────────────────────────
+  rdxclaw-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rdxclaw-gateway
+    restart: unless-stopped
+    profiles:
+      - gateway
+    volumes:
+      # Configuration file
+      - ./config/config.json:/root/.rdxclaw/config.json:ro
+      # Persistent workspace (sessions, memory, logs)
+      - rdxclaw-workspace:/root/.rdxclaw/workspace
+    command: ["gateway"]
+
+volumes:
+  rdxclaw-workspace:
