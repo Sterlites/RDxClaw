@@ -22,10 +22,12 @@ import (
 	"github.com/Sterlites/RDxClaw/pkg/channels"
 	"github.com/Sterlites/RDxClaw/pkg/config"
 	"github.com/Sterlites/RDxClaw/pkg/constants"
+	"github.com/Sterlites/RDxClaw/pkg/knowledge"
 	"github.com/Sterlites/RDxClaw/pkg/logger"
 	"github.com/Sterlites/RDxClaw/pkg/providers"
 	"github.com/Sterlites/RDxClaw/pkg/session"
 	"github.com/Sterlites/RDxClaw/pkg/state"
+	"github.com/Sterlites/RDxClaw/pkg/swarm"
 	"github.com/Sterlites/RDxClaw/pkg/tools"
 	"github.com/Sterlites/RDxClaw/pkg/utils"
 )
@@ -44,6 +46,7 @@ type AgentLoop struct {
 	running        atomic.Bool
 	summarizing    sync.Map // Tracks which sessions are currently being summarized
 	channelManager *channels.Manager
+	swarmManager   *swarm.Manager
 }
 
 // processOptions configures how a message is processed
@@ -101,6 +104,17 @@ func createToolRegistry(workspace string, restrict bool, cfg *config.Config, msg
 	})
 	registry.Register(messageTool)
 
+	// Knowledge Tool (RAG)
+	knowledgeDir := filepath.Join(workspace, "knowledge")
+	// Initialize store (ignore error for now, just log if fails)
+	if store, err := knowledge.NewStore(knowledgeDir); err == nil {
+		registry.Register(tools.NewKnowledgeTool(store))
+	} else {
+		// We can't use logger here easily as we don't pass it context, but we can print to stderr or just skip
+		// Better to just skip for now or use global logger if available
+		// logger.Warn("Failed to init knowledge store: " + err.Error())
+	}
+
 	return registry
 }
 
@@ -113,19 +127,23 @@ func NewAgentLoop(cfg *config.Config, msgBus *bus.MessageBus, provider providers
 	// Create tool registry for main agent
 	toolsRegistry := createToolRegistry(workspace, restrict, cfg, msgBus)
 
-	// Create subagent manager with its own tool registry
-	subagentManager := tools.NewSubagentManager(provider, cfg.Agents.Defaults.Model, workspace, msgBus)
+	// Create subagent/swarm manager with its own tool registry
+	swarmManager := swarm.NewManager(provider, cfg.Agents.Defaults.Model, workspace, msgBus)
 	subagentTools := createToolRegistry(workspace, restrict, cfg, msgBus)
 	// Subagent doesn't need spawn/subagent tools to avoid recursion
-	subagentManager.SetTools(subagentTools)
+	swarmManager.SetToolRegistry(subagentTools)
 
 	// Register spawn tool (for main agent)
-	spawnTool := tools.NewSpawnTool(subagentManager)
+	spawnTool := swarm.NewSpawnTool(swarmManager)
 	toolsRegistry.Register(spawnTool)
 
 	// Register subagent tool (synchronous execution)
-	subagentTool := tools.NewSubagentTool(subagentManager)
+	subagentTool := swarm.NewSubagentTool(swarmManager)
 	toolsRegistry.Register(subagentTool)
+
+	// Register swarm tool (management)
+	swarmTool := swarm.NewSwarmTool(swarmManager)
+	toolsRegistry.Register(swarmTool)
 
 	sessionsManager := session.NewSessionManager(filepath.Join(workspace, "sessions"))
 
@@ -146,8 +164,10 @@ func NewAgentLoop(cfg *config.Config, msgBus *bus.MessageBus, provider providers
 		sessions:       sessionsManager,
 		state:          stateManager,
 		contextBuilder: contextBuilder,
+		contextBuilder: contextBuilder,
 		tools:          toolsRegistry,
 		summarizing:    sync.Map{},
+		swarmManager:   swarmManager,
 	}
 }
 
@@ -203,6 +223,10 @@ func (al *AgentLoop) RegisterTool(tool tools.Tool) {
 
 func (al *AgentLoop) SetChannelManager(cm *channels.Manager) {
 	al.channelManager = cm
+}
+
+func (al *AgentLoop) GetSwarmManager() *swarm.Manager {
+	return al.swarmManager
 }
 
 // RecordLastChannel records the last active channel for this workspace.

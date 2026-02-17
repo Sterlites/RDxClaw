@@ -48,6 +48,7 @@ type CronJob struct {
 	CreatedAtMS    int64        `json:"createdAtMs"`
 	UpdatedAtMS    int64        `json:"updatedAtMs"`
 	DeleteAfterRun bool         `json:"deleteAfterRun"`
+	SkillID        string       `json:"skillId,omitempty"` // Links job to owning skill (empty = user-created)
 }
 
 type CronStore struct {
@@ -415,6 +416,32 @@ func (cs *CronService) removeJobUnsafe(jobID string) bool {
 	if removed {
 		if err := cs.saveStoreUnsafe(); err != nil {
 			log.Printf("[cron] failed to save store after remove: %v", err)
+		}
+	}
+
+	return removed
+}
+
+// RemoveJobsBySkill removes all cron jobs owned by the given skill.
+// Used during skill uninstallation to clean up auto-provisioned jobs.
+// Returns the number of jobs removed.
+func (cs *CronService) RemoveJobsBySkill(skillID string) int {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+
+	before := len(cs.store.Jobs)
+	var jobs []CronJob
+	for _, job := range cs.store.Jobs {
+		if job.SkillID != skillID {
+			jobs = append(jobs, job)
+		}
+	}
+	cs.store.Jobs = jobs
+	removed := before - len(cs.store.Jobs)
+
+	if removed > 0 {
+		if err := cs.saveStoreUnsafe(); err != nil {
+			log.Printf("[cron] failed to save store after skill job removal: %v", err)
 		}
 	}
 

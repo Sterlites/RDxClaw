@@ -24,10 +24,12 @@ type SkillMetadata struct {
 }
 
 type SkillInfo struct {
-	Name        string `json:"name"`
-	Path        string `json:"path"`
-	Source      string `json:"source"`
-	Description string `json:"description"`
+	Name         string         `json:"name"`
+	Path         string         `json:"path"`
+	Source       string         `json:"source"`
+	Description  string         `json:"description"`
+	Manifest     *SkillManifest `json:"manifest,omitempty"`
+	Capabilities string         `json:"capabilities,omitempty"` // e.g. "2 script(s), 1 cron job(s)"
 }
 
 func (info SkillInfo) validate() error {
@@ -74,23 +76,9 @@ func (sl *SkillsLoader) ListSkills() []SkillInfo {
 		if dirs, err := os.ReadDir(sl.workspaceSkills); err == nil {
 			for _, dir := range dirs {
 				if dir.IsDir() {
-					skillFile := filepath.Join(sl.workspaceSkills, dir.Name(), "SKILL.md")
-					if _, err := os.Stat(skillFile); err == nil {
-						info := SkillInfo{
-							Name:   dir.Name(),
-							Path:   skillFile,
-							Source: "workspace",
-						}
-						metadata := sl.getSkillMetadata(skillFile)
-						if metadata != nil {
-							info.Description = metadata.Description
-							info.Name = metadata.Name
-						}
-						if err := info.validate(); err != nil {
-							slog.Warn("invalid skill from workspace", "name", info.Name, "error", err)
-							continue
-						}
-						skills = append(skills, info)
+					info := sl.loadSkillInfo(sl.workspaceSkills, dir.Name(), "workspace")
+					if info != nil {
+						skills = append(skills, *info)
 					}
 				}
 			}
@@ -98,78 +86,35 @@ func (sl *SkillsLoader) ListSkills() []SkillInfo {
 	}
 
 	// 全局 skills (~/.rdxclaw/skills) - 被 workspace skills 覆盖
+	// Global skills (~/.rdxclaw/skills) — overridden by workspace skills
 	if sl.globalSkills != "" {
 		if dirs, err := os.ReadDir(sl.globalSkills); err == nil {
 			for _, dir := range dirs {
 				if dir.IsDir() {
-					skillFile := filepath.Join(sl.globalSkills, dir.Name(), "SKILL.md")
-					if _, err := os.Stat(skillFile); err == nil {
-						// 检查是否已被 workspace skills 覆盖
-						exists := false
-						for _, s := range skills {
-							if s.Name == dir.Name() && s.Source == "workspace" {
-								exists = true
-								break
-							}
-						}
-						if exists {
-							continue
-						}
-
-						info := SkillInfo{
-							Name:   dir.Name(),
-							Path:   skillFile,
-							Source: "global",
-						}
-						metadata := sl.getSkillMetadata(skillFile)
-						if metadata != nil {
-							info.Description = metadata.Description
-							info.Name = metadata.Name
-						}
-						if err := info.validate(); err != nil {
-							slog.Warn("invalid skill from global", "name", info.Name, "error", err)
-							continue
-						}
-						skills = append(skills, info)
+					// Check if already overridden by workspace
+					if sl.skillExists(skills, dir.Name(), "workspace") {
+						continue
+					}
+					info := sl.loadSkillInfo(sl.globalSkills, dir.Name(), "global")
+					if info != nil {
+						skills = append(skills, *info)
 					}
 				}
 			}
 		}
 	}
 
+	// Builtin skills — overridden by workspace or global
 	if sl.builtinSkills != "" {
 		if dirs, err := os.ReadDir(sl.builtinSkills); err == nil {
 			for _, dir := range dirs {
 				if dir.IsDir() {
-					skillFile := filepath.Join(sl.builtinSkills, dir.Name(), "SKILL.md")
-					if _, err := os.Stat(skillFile); err == nil {
-						// 检查是否已被 workspace 或 global skills 覆盖
-						exists := false
-						for _, s := range skills {
-							if s.Name == dir.Name() && (s.Source == "workspace" || s.Source == "global") {
-								exists = true
-								break
-							}
-						}
-						if exists {
-							continue
-						}
-
-						info := SkillInfo{
-							Name:   dir.Name(),
-							Path:   skillFile,
-							Source: "builtin",
-						}
-						metadata := sl.getSkillMetadata(skillFile)
-						if metadata != nil {
-							info.Description = metadata.Description
-							info.Name = metadata.Name
-						}
-						if err := info.validate(); err != nil {
-							slog.Warn("invalid skill from builtin", "name", info.Name, "error", err)
-							continue
-						}
-						skills = append(skills, info)
+					if sl.skillExists(skills, dir.Name(), "workspace") || sl.skillExists(skills, dir.Name(), "global") {
+						continue
+					}
+					info := sl.loadSkillInfo(sl.builtinSkills, dir.Name(), "builtin")
+					if info != nil {
+						skills = append(skills, *info)
 					}
 				}
 			}
@@ -177,6 +122,80 @@ func (sl *SkillsLoader) ListSkills() []SkillInfo {
 	}
 
 	return skills
+}
+
+// loadSkillInfo loads a skill from a directory. A skill is detected if it has
+// either SKILL.md, manifest.json, or both. Manifest data takes priority.
+func (sl *SkillsLoader) loadSkillInfo(baseDir, dirName, source string) *SkillInfo {
+	skillDir := filepath.Join(baseDir, dirName)
+	skillFile := filepath.Join(skillDir, "SKILL.md")
+	_, hasSkillMD := os.Stat(skillFile), true
+	if _, err := os.Stat(skillFile); err != nil {
+		hasSkillMD = false
+	}
+
+	// Try loading manifest.json
+	manifest, _ := LoadManifest(skillDir)
+
+	// Skill must have at least SKILL.md or manifest.json
+	if !hasSkillMD && manifest == nil {
+		return nil
+	}
+
+	path := skillFile
+	if !hasSkillMD && manifest != nil {
+		path = filepath.Join(skillDir, "manifest.json")
+	}
+
+	info := SkillInfo{
+		Name:     dirName,
+		Path:     path,
+		Source:   source,
+		Manifest: manifest,
+	}
+
+	// Manifest data takes priority over SKILL.md frontmatter
+	if manifest != nil {
+		info.Name = manifest.Name
+		info.Description = manifest.Description
+		info.Capabilities = manifest.CapabilitiesSummary()
+	} else if hasSkillMD {
+		metadata := sl.getSkillMetadata(skillFile)
+		if metadata != nil {
+			info.Description = metadata.Description
+			if metadata.Name != "" {
+				info.Name = metadata.Name
+			}
+		}
+		info.Capabilities = "prompt-only"
+	}
+
+	if err := info.validate(); err != nil {
+		slog.Warn("invalid skill", "name", info.Name, "source", source, "error", err)
+		return nil
+	}
+
+	return &info
+}
+
+// skillExists checks if a skill with the given directory name and source already exists.
+func (sl *SkillsLoader) skillExists(skills []SkillInfo, dirName, source string) bool {
+	for _, s := range skills {
+		if s.Name == dirName && s.Source == source {
+			return true
+		}
+	}
+	return false
+}
+
+// GetSkillManifest returns the manifest for a named skill, or nil if not found.
+func (sl *SkillsLoader) GetSkillManifest(name string) *SkillManifest {
+	for _, s := range sl.ListSkills() {
+		if s.Name == name && s.Manifest != nil {
+			return s.Manifest
+		}
+	}
+	return nil
 }
 
 func (sl *SkillsLoader) LoadSkill(name string) (string, bool) {
@@ -236,11 +255,14 @@ func (sl *SkillsLoader) BuildSkillsSummary() string {
 		escapedDesc := escapeXML(s.Description)
 		escapedPath := escapeXML(s.Path)
 
-		lines = append(lines, fmt.Sprintf("  <skill>"))
+		lines = append(lines, "  <skill>")
 		lines = append(lines, fmt.Sprintf("    <name>%s</name>", escapedName))
 		lines = append(lines, fmt.Sprintf("    <description>%s</description>", escapedDesc))
 		lines = append(lines, fmt.Sprintf("    <location>%s</location>", escapedPath))
 		lines = append(lines, fmt.Sprintf("    <source>%s</source>", s.Source))
+		if s.Capabilities != "" {
+			lines = append(lines, fmt.Sprintf("    <capabilities>%s</capabilities>", escapeXML(s.Capabilities)))
+		}
 		lines = append(lines, "  </skill>")
 	}
 	lines = append(lines, "</skills>")

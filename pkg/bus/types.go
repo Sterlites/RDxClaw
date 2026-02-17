@@ -1,6 +1,7 @@
 package bus
 
 type InboundMessage struct {
+	Type       string            `json:"type,omitempty"` // "text", "event", "command", "webhook"
 	Channel    string            `json:"channel"`
 	SenderID   string            `json:"sender_id"`
 	ChatID     string            `json:"chat_id"`

@@ -10,6 +10,7 @@ import (
 	"bufio"
 	"context"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/chzyer/readline"
 	"github.com/Sterlites/RDxClaw/pkg/agent"
+	"github.com/Sterlites/RDxClaw/pkg/api"
 	"github.com/Sterlites/RDxClaw/pkg/auth"
 	"github.com/Sterlites/RDxClaw/pkg/bus"
 	"github.com/Sterlites/RDxClaw/pkg/channels"
@@ -134,6 +136,8 @@ func main() {
 		agentCmd()
 	case "gateway":
 		gatewayCmd()
+	case "server":
+		serverCmd()
 	case "status":
 		statusCmd()
 	case "migrate":
@@ -142,6 +146,8 @@ func main() {
 		authCmd()
 	case "cron":
 		cronCmd()
+	case "swarm":
+		swarmCmd()
 	case "skills":
 		if len(os.Args) < 3 {
 			skillsHelp()
@@ -209,10 +215,12 @@ func printHelp() {
 	fmt.Println("  agent       Interact with the agent directly")
 	fmt.Println("  auth        Manage authentication (login, logout, status)")
 	fmt.Println("  gateway     Start rdxclaw gateway")
+	fmt.Println("  server      Start rdxclaw headless API server")
 	fmt.Println("  status      Show rdxclaw status")
 	fmt.Println("  cron        Manage scheduled tasks")
 	fmt.Println("  migrate     Migrate from OpenClaw to rdxclaw")
 	fmt.Println("  skills      Manage skills (install, list, remove)")
+	fmt.Println("  swarm       Manage swarm agents (list, kill)")
 	fmt.Println("  version     Show version information")
 }
 
@@ -368,6 +376,121 @@ func migrateHelp() {
 	fmt.Println("  rdxclaw migrate --dry-run    Show what would be migrated")
 	fmt.Println("  rdxclaw migrate --refresh    Re-sync workspace files")
 	fmt.Println("  rdxclaw migrate --force      Migrate without confirmation")
+}
+
+func swarmCmd() {
+	if len(os.Args) < 3 {
+		swarmHelp()
+		return
+	}
+
+	command := os.Args[2]
+	
+	// Load config for API details
+	cfg, err := loadConfig()
+	if err != nil {
+		fmt.Printf("Error loading config: %v\n", err)
+		os.Exit(1)
+	}
+
+	baseURL := fmt.Sprintf("http://%s:%d/v1", cfg.API.Host, cfg.API.Port)
+	if cfg.API.Host == "" {
+		baseURL = fmt.Sprintf("http://localhost:%d/v1", cfg.API.Port)
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	
+	switch command {
+	case "list":
+		req, _ := http.NewRequest("GET", baseURL+"/agents", nil)
+		if cfg.API.APIKey != "" {
+			req.Header.Set("Authorization", "Bearer "+cfg.API.APIKey)
+		}
+		
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Printf("Error connecting to server: %v\n", err)
+			os.Exit(1)
+		}
+		defer resp.Body.Close()
+		
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			fmt.Printf("Error: Server returned %s\n%s\n", resp.Status, string(body))
+			os.Exit(1)
+		}
+
+		var result struct {
+			Agents []struct {
+				ID      string `json:"id"`
+				Task    string `json:"task"`
+				Status  string `json:"status"`
+				Label   string `json:"label"`
+				Created int64  `json:"created"`
+			} `json:"agents"`
+		}
+		
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			fmt.Printf("Error parsing response: %v\n", err)
+			os.Exit(1)
+		}
+		
+		if len(result.Agents) == 0 {
+			fmt.Println("No active swarm agents.")
+			return
+		}
+		
+		fmt.Println("Active Swarm Agents:")
+		fmt.Printf("%-10s %-15s %-10s %s\n", "ID", "LABEL", "STATUS", "TASK")
+		fmt.Println(strings.Repeat("-", 60))
+		for _, a := range result.Agents {
+			taskPreview := a.Task
+			if len(taskPreview) > 30 {
+				taskPreview = taskPreview[:27] + "..."
+			}
+			fmt.Printf("%-10s %-15s %-10s %s\n", a.ID, a.Label, a.Status, taskPreview)
+		}
+
+	case "kill":
+		if len(os.Args) < 4 {
+			fmt.Println("Usage: rdxclaw swarm kill <agent-id>")
+			return
+		}
+		agentID := os.Args[3]
+		
+		req, _ := http.NewRequest("DELETE", baseURL+"/agents/"+agentID, nil)
+		if cfg.API.APIKey != "" {
+			req.Header.Set("Authorization", "Bearer "+cfg.API.APIKey)
+		}
+		
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Printf("Error connecting to server: %v\n", err)
+			os.Exit(1)
+		}
+		defer resp.Body.Close()
+		
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			fmt.Printf("Error: Server returned %s\n%s\n", resp.Status, string(body))
+			os.Exit(1)
+		}
+		
+		fmt.Printf("Agent %s killed successfully.\n", agentID)
+
+	default:
+		swarmHelp()
+	}
+}
+
+func swarmHelp() {
+	fmt.Println("\nManage Swarm Agents")
+	fmt.Println()
+	fmt.Println("Usage: rdxclaw swarm <command> [args]")
+	fmt.Println()
+	fmt.Println("Commands:")
+	fmt.Println("  list              List all active/recent agents")
+	fmt.Println("  kill <id>         Terminate a running agent")
 }
 
 func agentCmd() {
@@ -686,6 +809,134 @@ func gatewayCmd() {
 	agentLoop.Stop()
 	channelManager.StopAll(ctx)
 	fmt.Println("✓ Gateway stopped")
+}
+
+func serverCmd() {
+	// Parse args
+	args := os.Args[2:]
+	for _, arg := range args {
+		if arg == "--debug" || arg == "-d" {
+			logger.SetLevel(logger.DEBUG)
+			fmt.Println("🔍 Debug mode enabled")
+		}
+	}
+
+	cfg, err := loadConfig()
+	if err != nil {
+		fmt.Printf("Error loading config: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Override config with flags if provided
+	// (Simple argument parsing for now, could be improved with flag package)
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--port" && i+1 < len(args) {
+			fmt.Sscanf(args[i+1], "%d", &cfg.API.Port)
+			i++
+		}
+		if args[i] == "--host" && i+1 < len(args) {
+			cfg.API.Host = args[i+1]
+			i++
+		}
+		if args[i] == "--api-key" && i+1 < len(args) {
+			cfg.API.APIKey = args[i+1]
+			i++
+		}
+	}
+
+	// Override with env var if flag not set and config empty
+	if cfg.API.APIKey == "" {
+		cfg.API.APIKey = os.Getenv("RDXCLAW_API_KEY")
+	}
+
+	if !cfg.API.Enabled {
+		fmt.Println("⚠️ API server is disabled in config. Enabling temporarily...")
+		cfg.API.Enabled = true
+	}
+
+	provider, err := providers.CreateProvider(cfg)
+	if err != nil {
+		fmt.Printf("Error creating provider: %v\n", err)
+		os.Exit(1)
+	}
+
+	msgBus := bus.NewMessageBus()
+	agentLoop := agent.NewAgentLoop(cfg, msgBus, provider)
+    
+    // Initialize skills loader
+	workspace := cfg.WorkspacePath()
+	globalDir := filepath.Dir(getConfigPath())
+	globalSkillsDir := filepath.Join(globalDir, "skills")
+	builtinSkillsDir := filepath.Join(globalDir, "rdxclaw", "skills")
+	skillsLoader := skills.NewSkillsLoader(workspace, globalSkillsDir, builtinSkillsDir)
+
+	// Setup cron service
+	cronService := setupCronTool(agentLoop, msgBus, cfg.WorkspacePath(), cfg.Agents.Defaults.RestrictToWorkspace)
+
+    // Setup heartbeat
+	heartbeatService := heartbeat.NewHeartbeatService(
+		cfg.WorkspacePath(),
+		cfg.Heartbeat.Interval,
+		cfg.Heartbeat.Enabled,
+	)
+	heartbeatService.SetBus(msgBus)
+    // Heartbeat for server uses internal processing
+	heartbeatService.SetHandler(func(prompt, channel, chatID string) *tools.ToolResult {
+		response, err := agentLoop.ProcessHeartbeat(context.Background(), prompt, "server", "heartbeat")
+		if err != nil {
+			return tools.ErrorResult(fmt.Sprintf("Heartbeat error: %v", err))
+		}
+		return tools.SilentResult(response)
+	})
+
+	serverConfig := api.ServerConfig{
+		Host:        cfg.API.Host,
+		Port:        cfg.API.Port,
+		APIKey:      cfg.API.APIKey,
+		RateLimit:   cfg.API.RateLimit,
+		CORSOrigins: cfg.API.CORSOrigins,
+	}
+
+	srv := api.NewServer(agentLoop, msgBus, skillsLoader, serverConfig)
+
+	fmt.Printf("%s RDxClaw API Server v%s\n", logo, version)
+	fmt.Printf("✓ Listening on %s:%d\n", cfg.API.Host, cfg.API.Port)
+	if cfg.API.APIKey != "" {
+		fmt.Println("🔒 API Key protection enabled")
+	} else {
+		fmt.Println("⚠️  Warning: No API Key configured (running in insecure mode)")
+	}
+
+	// Start services
+	if err := cronService.Start(); err != nil {
+		fmt.Printf("Error starting cron service: %v\n", err)
+	}
+	if err := heartbeatService.Start(); err != nil {
+		fmt.Printf("Error starting heartbeat service: %v\n", err)
+	}
+    
+    // Start agent loop in background
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+    go agentLoop.Run(ctx)
+
+    // Setup graceful shutdown
+	go func() {
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, os.Interrupt)
+		<-sigChan
+		fmt.Println("\nShutting down...")
+        cronService.Stop()
+        heartbeatService.Stop()
+        agentLoop.Stop()
+		os.Exit(0)
+	}()
+
+    // Start server (blocks)
+	if err := srv.Start(); err != nil {
+		fmt.Printf("Server error: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 func statusCmd() {

@@ -48,6 +48,7 @@ type Config struct {
 	Channels  ChannelsConfig  `json:"channels"`
 	Providers ProvidersConfig `json:"providers"`
 	Gateway   GatewayConfig   `json:"gateway"`
+	API       APIConfig       `json:"api"`
 	Tools     ToolsConfig     `json:"tools"`
 	Heartbeat HeartbeatConfig `json:"heartbeat"`
 	Devices   DevicesConfig   `json:"devices"`
@@ -149,6 +150,15 @@ type GatewayConfig struct {
 	Port int    `json:"port" env:"RDXCLAW_GATEWAY_PORT"`
 }
 
+type APIConfig struct {
+	Enabled     bool                `json:"enabled" env:"RDXCLAW_API_ENABLED"`
+	Host        string              `json:"host" env:"RDXCLAW_API_HOST"`
+	Port        int                 `json:"port" env:"RDXCLAW_API_PORT"`
+	APIKey      string              `json:"api_key" env:"RDXCLAW_API_KEY"`
+	RateLimit   int                 `json:"rate_limit" env:"RDXCLAW_API_RATE_LIMIT"` // requests per minute
+	CORSOrigins FlexibleStringSlice `json:"cors_origins" env:"RDXCLAW_API_CORS_ORIGINS"`
+}
+
 type BraveConfig struct {
 	Enabled    bool   `json:"enabled" env:"RDXCLAW_TOOLS_WEB_BRAVE_ENABLED"`
 	APIKey     string `json:"api_key" env:"RDXCLAW_TOOLS_WEB_BRAVE_API_KEY"`
@@ -226,6 +236,14 @@ func DefaultConfig() *Config {
 		Gateway: GatewayConfig{
 			Host: "0.0.0.0",
 			Port: 18790,
+		},
+		API: APIConfig{
+			Enabled:     true,
+			Host:        "0.0.0.0",
+			Port:        8080,
+			APIKey:      "", // generated or set by user
+			RateLimit:   60,
+			CORSOrigins: FlexibleStringSlice{"*"},
 		},
 		Tools: ToolsConfig{
 			Web: WebToolsConfig{

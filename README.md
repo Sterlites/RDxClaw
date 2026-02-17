@@ -43,6 +43,8 @@
 
 
 ## 📢 News
+2026-02-17 🚀 **Big 4 Upgrade**: RDxClaw is now an Enterprise-Grade Agent Platform! Added Headless API (OpenAI-compatible), Local RAG (Corporate Memory), Skill App Standard, and Swarm Management.
+
 2026-02-16 🎉 RDxClaw hit 12K stars in one week! Thank you all for your support! RDxClaw is growing faster than we ever imagined. Our volunteer roles and roadmap are officially posted [doc/RDxClaw_community_roadmap_260216.md] —we can’t wait to have you on board!
 
 2026-02-09 🎉 RDxClaw Launched! Built in 1 day to bring AI Agents to lightweight hardware with <10MB RAM. 🦐 RDxClaw, Let's Go！
@@ -56,6 +58,12 @@
 ⚡️ **Lightning Fast**: 400X Faster startup time, boot in 1 second even in 0.6GHz single core.
 
 🌍 **True Portability**: Single self-contained binary across RISC-V, ARM, and x86, One-click to Go!
+
+🧠 **Corporate Memory**: Built-in zero-dependency BM25 RAG system for local business intelligence.
+
+🐝 **Swarm Management**: Centralized control over autonomous subagents with CLI/API visibility.
+
+💎 **Skill Apps**: Installable, monetizable skill packages with `manifest.json` and auto-provisioning.
 
 🤖 **AI-Bootstrapped**: Autonomous Go-native implementation — 95% Agent-generated core with human-in-the-loop refinement.
 
@@ -654,8 +662,12 @@ The subagent has access to tools (message, web_search, etc.) and can communicate
 | `RDxClaw agent`          | Interactive chat mode         |
 | `RDxClaw gateway`        | Start the gateway             |
 | `RDxClaw status`         | Show status                   |
+| `RDxClaw server`         | Start Headless API server      |
+| `RDxClaw swarm list`      | List active swarm agents       |
+| `RDxClaw swarm kill <id>` | Terminate a subagent           |
 | `RDxClaw cron list`      | List all scheduled jobs       |
 | `RDxClaw cron add ...`   | Add a scheduled job           |
+| `RDxClaw skills install` | Install a skill package (zip/tgz)|
 
 ### Scheduled Tasks / Reminders
 
@@ -667,11 +679,36 @@ RDxClaw supports scheduled reminders and recurring tasks through the `cron` tool
 
 Jobs are stored in `~/.RDxClaw/workspace/cron/` and processed automatically.
 
+## 🏢 Enterprise Features
+
+### 🌐 Headless API & Webhooks
+RDxClaw provides an OpenAI-compatible REST API, allowing you to trigger agents from Zapier, Stripe, Shopify, or custom apps.
+```bash
+# Start the API server
+RDxClaw server --port 8080 --api-key your-key
+```
+- `POST /v1/chat/completions`: Standard chat interface.
+- `POST /v1/webhooks/`: Universal event receiver for external triggers.
+
+### 🧠 Corporate Memory (RAG)
+Index the local documentation or business data without external embedding APIs. RDxClaw uses a Go-native BM25 search engine for privacy-first knowledge retrieval.
+- Large document support (PDF, MD, TXT).
+- Instant indexing and keyword-optimized retrieval.
+
+### 🐝 Swarm Management
+Run multiple autonomous subagents concurrently. Track their progress, token usage, and lifecycle through the CLI or API.
+- `spawn_agent`: Background task execution.
+- `delegate_task`: Synchronous sub-task delegation.
+
 ## 🤝 Contribute & Roadmap
 
 PRs welcome! The codebase is intentionally small and readable. 🤗
 
-Roadmap coming soon...
+Roadmap:
+1. [x] Phase 1-4: Enterprise Platform Core (Done 2026-02-17)
+2. [ ] Phase 5: Voice Intelligence (Edge TTS/STT)
+3. [ ] Phase 6: Computer Vision Integration
+4. [ ] Phase 7: Multi-Node Mesh Swarm
 
 Developer group building, Entry Requirement: At least 1 Merged PR.
 
