@@ -10,7 +10,7 @@
     <img src="https://img.shields.io/badge/Standard-Skill_App-6366f1" alt="Skill App">
     <img src="https://img.shields.io/badge/Security-Workspace_Sandbox-10b981" alt="Security">
     <br>
-    <a href="https://RDxClaw.io"><img src="https://img.shields.io/badge/Website-RDxClaw.io-blue?style=flat&logo=google-chrome&logoColor=white" alt="Website"></a>
+    <a href="https://sterlites.com"><img src="https://img.shields.io/badge/Website-Sterlites.com-blue?style=flat&logo=google-chrome&logoColor=white" alt="Website"></a>
   </p>
 </div>
 
@@ -126,7 +126,7 @@ PRs welcome! RDxClaw is built for community growth and professional reliability.
 3. [ ] Phase 6: Computer Vision & Edge AI
 4. [ ] Phase 7: Multi-Node Mesh Swarm Networks
 
-Join the conversation: [Discord](https://discord.gg/V4sAZ9XWpN)
+Join the conversation: [Discord](https://discord.gg/R5Tu7p8SM2)
 
 ---
 
