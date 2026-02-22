@@ -239,6 +239,41 @@ func onboard() {
 	}
 
 	cfg := config.DefaultConfig()
+
+	fmt.Println("\nChoose your AI provider:")
+	fmt.Println("1. OpenRouter (Access to Claude-3.5, GPT-4o, etc. - Recommended)")
+	fmt.Println("2. NVIDIA NIM (Fastest/Free for Kimi-K2.5, Llama-3.3, etc.)")
+	fmt.Println("3. Configure later")
+	fmt.Print("\nSelect option (1-3): ")
+
+	var choice string
+	fmt.Scanln(&choice)
+
+	reader := bufio.NewReader(os.Stdin)
+
+	switch choice {
+	case "1":
+		fmt.Print("Enter your OpenRouter API Key (sk-or-v1-...): ")
+		key, _ := reader.ReadString('\n')
+		key = strings.TrimSpace(key)
+		if key != "" {
+			cfg.Providers.OpenRouter.APIKey = key
+			cfg.Agents.Defaults.Provider = "openrouter"
+			cfg.Agents.Defaults.Model = "openrouter/anthropic/claude-3.5-sonnet"
+		}
+	case "2":
+		fmt.Print("Enter your NVIDIA API Key (nvapi-...): ")
+		key, _ := reader.ReadString('\n')
+		key = strings.TrimSpace(key)
+		if key != "" {
+			cfg.Providers.Nvidia.APIKey = key
+			cfg.Agents.Defaults.Provider = "nvidia"
+			cfg.Agents.Defaults.Model = "nvidia/moonshotai/kimi-k2.5"
+		}
+	default:
+		fmt.Println("Skipping provider configuration. You'll need to edit the config later.")
+	}
+
 	if err := config.SaveConfig(configPath, cfg); err != nil {
 		fmt.Printf("Error saving config: %v\n", err)
 		os.Exit(1)
@@ -247,11 +282,18 @@ func onboard() {
 	workspace := cfg.WorkspacePath()
 	createWorkspaceTemplates(workspace)
 
-	fmt.Printf("%s RDxClaw is ready!\n", logo)
-	fmt.Println("\nNext steps:")
-	fmt.Println("  1. Add your API key to", configPath)
-	fmt.Println("     Get one at: https://openrouter.ai/keys")
-	fmt.Println("  2. Chat: rdxclaw agent -m \"Hello!\"")
+	fmt.Printf("\n%s RDxClaw is ready!\n", logo)
+	if choice == "3" || (choice != "1" && choice != "2") {
+		fmt.Println("\nNext steps:")
+		fmt.Println("  1. Add your API key to", configPath)
+		fmt.Println("     OpenRouter: https://openrouter.ai/keys")
+		fmt.Println("     NVIDIA NIM: https://build.nvidia.com/moonshotai/kimi-k2.5")
+		fmt.Println("  2. Chat: rdxclaw agent -m \"Hello!\"")
+	} else {
+		fmt.Println("\nNext steps:")
+		fmt.Println("  1. Chat: rdxclaw agent -m \"Hello!\"")
+		fmt.Println("  2. You can manage more settings in", configPath)
+	}
 }
 
 func copyEmbeddedToTarget(targetDir string) error {
