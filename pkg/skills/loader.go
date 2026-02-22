@@ -129,10 +129,8 @@ func (sl *SkillsLoader) ListSkills() []SkillInfo {
 func (sl *SkillsLoader) loadSkillInfo(baseDir, dirName, source string) *SkillInfo {
 	skillDir := filepath.Join(baseDir, dirName)
 	skillFile := filepath.Join(skillDir, "SKILL.md")
-	_, hasSkillMD := os.Stat(skillFile), true
-	if _, err := os.Stat(skillFile); err != nil {
-		hasSkillMD = false
-	}
+	_, err := os.Stat(skillFile)
+	hasSkillMD := err == nil
 
 	// Try loading manifest.json
 	manifest, _ := LoadManifest(skillDir)

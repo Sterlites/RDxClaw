@@ -115,7 +115,7 @@ func (idx *Index) Search(query string, limit int) ([]SearchResult, error) {
 
 		// IDF (Inverse Document Frequency)
 		// idf = log( (N - n + 0.5) / (n + 0.5) + 1 )
-		idf := math.Log(float64(idx.DocCount-docFreq+0.5)/float64(docFreq+0.5) + 1)
+		idf := math.Log((float64(idx.DocCount)-float64(docFreq)+0.5)/(float64(docFreq)+0.5) + 1)
 
 		for _, posting := range postings {
 			chunkID := posting.ChunkID

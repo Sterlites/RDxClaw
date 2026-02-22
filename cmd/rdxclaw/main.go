@@ -336,7 +336,7 @@ func migrateCmd() {
 			}
 		case "--rdxclaw-home":
 			if i+1 < len(args) {
-				opts.rdxclawHome = args[i+1]
+				opts.RDxClawHome = args[i+1]
 				i++
 			}
 		default:
@@ -1524,7 +1524,7 @@ func skillsInstallCmd(installer *skills.SkillInstaller) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if err := installer.InstallFromGitHub(ctx, repo); err != nil {
+	if _, err := installer.InstallFromGitHub(ctx, repo); err != nil {
 		fmt.Printf("✗ Failed to install skill: %v\n", err)
 		os.Exit(1)
 	}

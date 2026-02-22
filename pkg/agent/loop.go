@@ -164,7 +164,6 @@ func NewAgentLoop(cfg *config.Config, msgBus *bus.MessageBus, provider providers
 		sessions:       sessionsManager,
 		state:          stateManager,
 		contextBuilder: contextBuilder,
-		contextBuilder: contextBuilder,
 		tools:          toolsRegistry,
 		summarizing:    sync.Map{},
 		swarmManager:   swarmManager,

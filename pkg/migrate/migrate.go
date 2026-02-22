@@ -28,7 +28,7 @@ type Options struct {
 	Force         bool
 	Refresh       bool
 	OpenClawHome  string
-	rdxclawHome   string
+	RDxClawHome   string
 }
 
 type Action struct {
@@ -62,7 +62,7 @@ func Run(opts Options) (*Result, error) {
 		return nil, err
 	}
 
-	rdxclawHome, err := resolverdxclawHome(opts.rdxclawHome)
+	rdxclawHome, err := resolverdxclawHome(opts.RDxClawHome)
 	if err != nil {
 		return nil, err
 	}

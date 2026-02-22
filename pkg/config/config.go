@@ -134,6 +134,7 @@ type ProvidersConfig struct {
 	Ollama        ProviderConfig `json:"ollama"`
 	DeepSeek      ProviderConfig `json:"deepseek"`
 	GitHubCopilot ProviderConfig `json:"github_copilot"`
+	ShengSuanYun  ProviderConfig `json:"shengsuanyun"`
 }
 
 type ProviderConfig struct {
