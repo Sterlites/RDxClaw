@@ -1,88 +1,39 @@
-name: 🚀 Deploy RDxClaw to VPS
+name: Deploy RDxClaw to VPS
 on:
   push:
     branches: [ main ]
 permissions:
   contents: read
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-    - name: 📥 Checkout
-      uses: actions/checkout@v4
-
-    - name: ⚙️ Setup Go
-      uses: actions/setup-go@v5
+    - uses: actions/checkout@v4
+    
+    - uses: actions/setup-go@v5
       with:
         go-version: '1.25'
-
-    - name: 🏗️ Build Binary
-      run: |
-        make generate
-        make build
-
-    - name: 📤 Deploy Binary
+        
+    - name: Build
+      run: make generate && make build
+      
+    - name: Deploy Binary
       uses: appleboy/scp-action@v1
       with:
         host: ${{ secrets.VPS_HOST }}
         username: ${{ secrets.VPS_USER }}
         key: ${{ secrets.VPS_SSH_KEY }}
         source: "build/rdxclaw-linux-amd64"
-        target: "/tmp/rdxclaw.new"
-
-    - name: 🔄 Deploy & Restart
+        target: "/tmp/rdxclaw"
+        
+    - name: Restart Service
       uses: appleboy/ssh-action@v1
       with:
         host: ${{ secrets.VPS_HOST }}
         username: ${{ secrets.VPS_USER }}
         key: ${{ secrets.VPS_SSH_KEY }}
         script: |
-          set -e
-          
-          # Stop service
-          sudo systemctl stop rdxclaw || true
-          
-          # Backup old binary
-          [ -f /usr/local/bin/rdxclaw ] && sudo mv /usr/local/bin/rdxclaw /usr/local/bin/rdxclaw.backup
-          
-          # Deploy new binary
-          sudo mv /tmp/rdxclaw.new /usr/local/bin/rdxclaw
-          sudo chmod +x /usr/local/bin/rdxclaw
-          
-          # Ensure systemd service exists
-          if [ ! -f /etc/systemd/system/rdxclaw.service ]; then
-            cat >/tmp/rdxclaw.service <<'SERVICE'
-[Unit]
-Description=RDX Claw Agent
-After=network.target
-
-[Service]
-User=deploy
-WorkingDirectory=/home/deploy
-ExecStart=/usr/local/bin/rdxclaw
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-SERVICE
-            
-            sudo mv /tmp/rdxclaw.service /etc/systemd/system/rdxclaw.service
-          fi
-          
-          # Reload and restart
-          sudo systemctl daemon-reload
-          sudo systemctl enable rdxclaw
-          sudo systemctl restart rdxclaw
-          
-          # Health check
-          sleep 3
-          if sudo systemctl is-active --quiet rdxclaw; then
-            echo "✅ RDxClaw LIVE!"
-            sudo systemctl status rdxclaw --no-pager -l
-          else
-            echo "❌ FAILED"
-            sudo journalctl -u rdxclaw -n 20 --no-pager
-            exit 1
-          fi
+          sudo -n mv /tmp/rdxclaw /usr/local/bin/rdxclaw
+          sudo -n chmod +x /usr/local/bin/rdxclaw
+          sudo -n systemctl restart rdxclaw || sudo -n systemctl start rdxclaw
+          sudo -n systemctl status rdxclaw --no-pager -l
