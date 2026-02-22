@@ -38,37 +38,25 @@ jobs:
           echo "=== CLEANUP ==="
           rm -rf ~/rdxclaw* || true
           pkill -f rdxclaw || true
-          sleep 2
+          sleep 3
 
-          echo "=== FIND BINARY ==="
+          echo "=== TRANSFER ==="
           BINARY_PATH=$(find /tmp -name rdxclaw-linux-amd64 -type f | head -1)
-          [ -n "$BINARY_PATH" ] || { echo "❌ Binary missing"; find /tmp -name "*rdx*"; exit 1; }
-          echo "✅ Found: $BINARY_PATH"
-          file "$BINARY_PATH"
-
-          echo "=== DEPLOY ==="
+          [ -n "$BINARY_PATH" ] || { echo "❌ No binary"; exit 1; }
           mv "$BINARY_PATH" ~/rdxclaw
           chmod +x ~/rdxclaw
-          ls -la ~/rdxclaw
 
-          echo "=== PREP CONFIG ==="
-          mkdir -p ~/.config/rdxclaw
-          echo '{"first_run": true}' > ~/.config/rdxclaw/config.json
-
-          echo "=== START RDxClaw ==="
-          nohup ~/rdxclaw > ~/rdxclaw.log 2>&1 &
-          RDX_PID=$!
-          echo "Started PID: $RDX_PID"
-          sleep 15
-
-          echo "=== HEALTH CHECK ==="
-          if ps -p $RDX_PID > /dev/null 2>&1; then
-            echo "✅ LIVE! PID: $RDX_PID"
-            ps aux | grep rdxclaw | grep -v grep | head -2
-            echo "--- LOGS ---"
-            tail -n 20 ~/rdxclaw.log
-          else
-            echo "⚠️ EXITED (normal for first run). Check logs:"
-            cat ~/rdxclaw.log
-            echo "Manual check: ssh $USER@$HOSTNAME 'tail -f ~/rdxclaw.log'"
+          echo "=== CONFIG CHECK ==="
+          if [ ! -f ~/.config/rdxclaw/config.json ] || [ ! -s ~/.config/rdxclaw/config.json ]; then
+            echo "⚠️ No config - needs manual setup first"
+            echo "ssh $USER@$HOSTNAME '~/rdxclaw'"
+            exit 0
           fi
+
+          echo "=== RESTART LIVE ==="
+          pkill -f rdxclaw || true
+          nohup ~/rdxclaw > ~/rdxclaw.log 2>&1 &
+          sleep 10
+
+          echo "✅ LIVE - Logs:"
+          tail -20 ~/rdxclaw.log
