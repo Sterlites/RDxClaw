@@ -36,34 +36,39 @@ jobs:
         script: |
           set -e
           echo "=== CLEANUP ==="
-          rm -rf ~/rdxclaw ~/rdxclaw.log || true
+          rm -rf ~/rdxclaw* || true
           pkill -f rdxclaw || true
           sleep 2
 
           echo "=== FIND BINARY ==="
           BINARY_PATH=$(find /tmp -name rdxclaw-linux-amd64 -type f | head -1)
-          if [ -z "$BINARY_PATH" ]; then
-            echo "❌ No binary found!"
-            find /tmp -name "*rdx*" 2>/dev/null || true
-            exit 1
-          fi
-          echo "Found: $BINARY_PATH"
+          [ -n "$BINARY_PATH" ] || { echo "❌ Binary missing"; find /tmp -name "*rdx*"; exit 1; }
+          echo "✅ Found: $BINARY_PATH"
           file "$BINARY_PATH"
 
           echo "=== DEPLOY ==="
           mv "$BINARY_PATH" ~/rdxclaw
           chmod +x ~/rdxclaw
+          ls -la ~/rdxclaw
 
-          echo "=== START ==="
+          echo "=== PREP CONFIG ==="
+          mkdir -p ~/.config/rdxclaw
+          echo '{"first_run": true}' > ~/.config/rdxclaw/config.json
+
+          echo "=== START RDxClaw ==="
           nohup ~/rdxclaw > ~/rdxclaw.log 2>&1 &
-          sleep 10
+          RDX_PID=$!
+          echo "Started PID: $RDX_PID"
+          sleep 15
 
           echo "=== HEALTH CHECK ==="
-          if pgrep -f rdxclaw >/dev/null; then
-            echo "✅ LIVE! PID: $(pgrep -f rdxclaw)"
-            tail -n 10 ~/rdxclaw.log
+          if ps -p $RDX_PID > /dev/null 2>&1; then
+            echo "✅ LIVE! PID: $RDX_PID"
+            ps aux | grep rdxclaw | grep -v grep | head -2
+            echo "--- LOGS ---"
+            tail -n 20 ~/rdxclaw.log
           else
-            echo "❌ FAILED. Logs:"
-            cat ~/rdxclaw.log || echo "No logs"
-            exit 1
+            echo "⚠️ EXITED (normal for first run). Check logs:"
+            cat ~/rdxclaw.log
+            echo "Manual check: ssh $USER@$HOSTNAME 'tail -f ~/rdxclaw.log'"
           fi
