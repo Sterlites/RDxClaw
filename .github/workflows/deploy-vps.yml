@@ -1,3 +1,32 @@
+name: Deploy RDxClaw (SCP + SSH)
+on:
+  push:
+    branches: [ main ]
+permissions:
+  contents: read
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+    
+    - name: Build
+      run: make generate && make build
+    
+    - name: SCP Binary
+      uses: appleboy/scp-action@v1
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        source: "build/rdxclaw-linux-amd64"
+        target: "/tmp/"
+        overwrite: true
+
     - name: Deploy & Start
       uses: appleboy/ssh-action@v1
       with:
@@ -6,41 +35,35 @@
         key: ${{ secrets.VPS_SSH_KEY }}
         script: |
           set -e
-          
           echo "=== CLEANUP ==="
-          rm -rf ~/rdxclaw ~/rdxclaw.log  # Changed: -rf for directories
+          rm -rf ~/rdxclaw ~/rdxclaw.log || true
           pkill -f rdxclaw || true
           sleep 2
 
-          echo "=== FIND & VERIFY BINARY ==="
+          echo "=== FIND BINARY ==="
           BINARY_PATH=$(find /tmp -name rdxclaw-linux-amd64 -type f | head -1)
           if [ -z "$BINARY_PATH" ]; then
-            echo "❌ No binary found in /tmp!"
-            find /tmp -name "*rdxclaw*" -ls
+            echo "❌ No binary found!"
+            find /tmp -name "*rdx*" 2>/dev/null || true
             exit 1
           fi
-          echo "Found binary: $BINARY_PATH"
-          ls -la "$BINARY_PATH"
+          echo "Found: $BINARY_PATH"
           file "$BINARY_PATH"
 
           echo "=== DEPLOY ==="
           mv "$BINARY_PATH" ~/rdxclaw
           chmod +x ~/rdxclaw
-          ls -la ~/rdxclaw
 
-          echo "=== START (PicoClaw) ==="
+          echo "=== START ==="
           nohup ~/rdxclaw > ~/rdxclaw.log 2>&1 &
-          RDX_PID=$!
           sleep 10
 
           echo "=== HEALTH CHECK ==="
           if pgrep -f rdxclaw >/dev/null; then
             echo "✅ LIVE! PID: $(pgrep -f rdxclaw)"
-            ps aux | grep rdxclaw | head -3
-            echo "--- Recent Logs ---"
-            tail -n 15 ~/rdxclaw.log
+            tail -n 10 ~/rdxclaw.log
           else
-            echo "❌ DEAD - Full Logs:"
-            cat ~/rdxclaw.log || echo "No log yet"
+            echo "❌ FAILED. Logs:"
+            cat ~/rdxclaw.log || echo "No logs"
             exit 1
           fi
