@@ -13,10 +13,10 @@ jobs:
     - uses: actions/setup-go@v5
       with:
         go-version: '1.25'
-        
+    
     - name: Build
       run: make generate && make build
-      
+    
     - name: SCP Binary
       uses: appleboy/scp-action@v1
       with:
@@ -24,8 +24,9 @@ jobs:
         username: ${{ secrets.VPS_USER }}
         key: ${{ secrets.VPS_SSH_KEY }}
         source: "build/rdxclaw-linux-amd64"
-        target: "/tmp/rdxclaw-linux-amd64"
-        
+        target: "/tmp/"  # Key: Target directory, not filename
+        overwrite: true
+
     - name: Deploy & Start
       uses: appleboy/ssh-action@v1
       with:
@@ -33,33 +34,36 @@ jobs:
         username: ${{ secrets.VPS_USER }}
         key: ${{ secrets.VPS_SSH_KEY }}
         script: |
+          set -e  # Exit on any error
+          
           echo "=== CLEANUP ==="
-          rm -rf ~/rdxclaw ~/rdxclaw*
-          
-          echo "=== VERIFY BINARY ==="
-          ls -la /tmp/rdxclaw-linux-amd64
-          file /tmp/rdxclaw-linux-amd64
-          
+          rm -f ~/rdxclaw ~/rdxclaw.log
+          pkill -f rdxclaw || true
+          sleep 2
+
+          echo "=== FIND & VERIFY BINARY ==="
+          BINARY_PATH=$(find /tmp -name rdxclaw-linux-amd64 -type f | head -1)
+          echo "Found binary: $BINARY_PATH"
+          ls -la "$BINARY_PATH"
+          file "$BINARY_PATH"
+
           echo "=== DEPLOY ==="
-          mv /tmp/rdxclaw-linux-amd64 ~/rdxclaw
+          mv "$BINARY_PATH" ~/rdxclaw
           chmod +x ~/rdxclaw
           ls -la ~/rdxclaw
-          
-          echo "=== RESTART ==="
-          pkill -f rdxclaw || true
-          sleep 1
-          
-          echo "=== START ==="
+
+          echo "=== START (PicoClaw) ==="
           nohup ~/rdxclaw > ~/rdxclaw.log 2>&1 &
-          sleep 3
-          
+          sleep 10  # Wait for agent init
+
           echo "=== HEALTH CHECK ==="
           if pgrep -f rdxclaw >/dev/null; then
             echo "✅ LIVE! PID: $(pgrep -f rdxclaw)"
-            ps aux | grep rdxclaw | head -1
-            tail -n 5 ~/rdxclaw.log
+            ps aux | grep rdxclaw | head -3
+            echo "--- Recent Logs ---"
+            tail -n 15 ~/rdxclaw.log
           else
-            echo "❌ DEAD - LOGS:"
-            tail -n 20 ~/rdxclaw.log
+            echo "❌ DEAD - Full Logs:"
+            cat ~/rdxclaw.log || echo "No log yet"
             exit 1
           fi
