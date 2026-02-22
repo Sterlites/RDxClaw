@@ -1,76 +1,39 @@
-name: 🐳 Build & Push Docker Image
-
+name: Deploy RDxClaw to VPS
 on:
-  workflow_call:
-    inputs:
-      tag:
-        description: "Release tag"
-        required: true
-        type: string
-
-env:
-  GHCR_REGISTRY: ghcr.io
-  GHCR_IMAGE_NAME: ${{ github.repository_owner }}/rdxclaw
-  DOCKERHUB_REGISTRY: docker.io
-  DOCKERHUB_IMAGE_NAME: ${{ vars.DOCKERHUB_REPOSITORY }}
-
+  push:
+    branches: [ main ]
+permissions:
+  contents: read
 jobs:
-  build:
-    name: 🏗️ Build Docker Image
+  deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
     steps:
-      # ── Checkout ──────────────────────────────
-      - name: 📥 Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag }}
-
-      # ── Docker Buildx ─────────────────────────
-      - name: 🔧 Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # ── Login to GHCR ─────────────────────────
-      - name: 🔑 Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.GHCR_REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # ── Login to Docker Hub ────────────────────
-      - name: 🔑 Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.DOCKERHUB_REGISTRY }}
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      # ── Metadata (tags & labels) ──────────────
-      - name: 🏷️ Prepare image tags
-        id: tags
-        shell: bash
-        run: |
-          tag="${{ inputs.tag }}"
-          echo "ghcr_tag=${{ env.GHCR_REGISTRY }}/${{ env.GHCR_IMAGE_NAME }}:${tag}" >> "$GITHUB_OUTPUT"
-          echo "ghcr_latest=${{ env.GHCR_REGISTRY }}/${{ env.GHCR_IMAGE_NAME }}:latest" >> "$GITHUB_OUTPUT"
-          echo "dockerhub_tag=${{ env.DOCKERHUB_REGISTRY }}/${{ env.DOCKERHUB_IMAGE_NAME }}:${tag}" >> "$GITHUB_OUTPUT"
-          echo "dockerhub_latest=${{ env.DOCKERHUB_REGISTRY }}/${{ env.DOCKERHUB_IMAGE_NAME }}:latest" >> "$GITHUB_OUTPUT"
-
-      # ── Build & Push ──────────────────────────
-      - name: 🚀 Build and push Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ steps.tags.outputs.ghcr_tag }}
-            ${{ steps.tags.outputs.ghcr_latest }}
-            ${{ steps.tags.outputs.dockerhub_tag }}
-            ${{ steps.tags.outputs.dockerhub_latest }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64,linux/riscv64
+    - uses: actions/checkout@v4
+    
+    - uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+        
+    - name: Build
+      run: make generate && make build
+      
+    - name: Deploy Binary
+      uses: appleboy/scp-action@v1
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        source: "build/rdxclaw-linux-amd64"
+        target: "/tmp/rdxclaw"
+        
+    - name: Restart Service
+      uses: appleboy/ssh-action@v1
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        script: |
+          sudo mv /tmp/rdxclaw /usr/local/bin/rdxclaw
+          sudo chmod +x /usr/local/bin/rdxclaw
+          sudo systemctl restart rdxclaw || sudo systemctl start rdxclaw
+          sudo systemctl status rdxclaw --no-pager -l
