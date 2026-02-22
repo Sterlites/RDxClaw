@@ -70,7 +70,7 @@ func (sm *Manager) Spawn(ctx context.Context, task, label, originChannel, origin
 
 	// Create a new context with cancel for this specific task
 	taskCtx, cancel := context.WithCancel(context.Background())
-	
+
 	subagentTask := &SubagentTask{
 		ID:            taskID,
 		Task:          task,
@@ -86,7 +86,7 @@ func (sm *Manager) Spawn(ctx context.Context, task, label, originChannel, origin
 	// Start task in background
 	go func() {
 		result, err := sm.RunTask(taskCtx, subagentTask)
-		
+
 		// Notify callback if present
 		if callback != nil {
 			toolResult := &tools.ToolResult{
@@ -170,7 +170,7 @@ When finished, provide a clear summary of your work.`
 
 	// Announce to bus
 	if sm.bus != nil {
-		announceContent := fmt.Sprintf("Swarm Agent '%s' (%s) finished.\nTask: %s\n\nResult:\n%s", 
+		announceContent := fmt.Sprintf("Swarm Agent '%s' (%s) finished.\nTask: %s\n\nResult:\n%s",
 			task.Label, task.ID, task.Task, task.Result)
 		sm.bus.PublishInbound(bus.InboundMessage{
 			Channel:  "system",
@@ -179,7 +179,7 @@ When finished, provide a clear summary of your work.`
 			Content:  announceContent,
 		})
 	}
-	
+
 	return loopResult, err
 }
 
@@ -207,7 +207,7 @@ func (sm *Manager) ListAgents() []*SubagentTask {
 func (sm *Manager) KillAgent(id string) error {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
-	
+
 	task, ok := sm.tasks[id]
 	if !ok {
 		return fmt.Errorf("agent not found")

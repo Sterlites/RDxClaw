@@ -34,7 +34,7 @@ func TestManager_Lifecycle(t *testing.T) {
 	manager := NewManager(provider, "test-model", "/tmp", msgBus)
 
 	ctx := context.Background()
-	
+
 	// Test Spawn
 	msg, err := manager.Spawn(ctx, "Test task", "test-agent", "test-channel", "test-chat", nil)
 	assert.NoError(t, err)
@@ -72,11 +72,11 @@ func TestManager_Kill(t *testing.T) {
 
 	// We can't easily wait for it to be mid-execution with a simple mock without channels
 	// but we can test the status transition.
-	
+
 	id, _ := manager.Spawn(context.Background(), "Long task", "kill-me", "ch", "chat", nil)
 	// Extract ID from message: "Spawned agent 'kill-me' (ID: agent-1) for task: Long task"
 	// ID is generated as agent-1, agent-2...
-	agentID := "agent-1" 
+	agentID := "agent-1"
 
 	err := manager.KillAgent(agentID)
 	assert.NoError(t, err)

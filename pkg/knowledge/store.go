@@ -54,7 +54,7 @@ func (s *Store) GetIndex(name string) (*Index, error) {
 	// Create new index
 	idx = NewIndex(name)
 	s.indexes[name] = idx
-	
+
 	// Save immediately to ensure file exists
 	if err := idx.Save(s.baseDir); err != nil {
 		return nil, fmt.Errorf("failed to save new index '%s': %w", name, err)
@@ -114,10 +114,10 @@ func (s *Store) ListCollections() ([]Collection, error) {
 	for _, file := range files {
 		if !file.IsDir() && strings.HasSuffix(file.Name(), ".index.json") {
 			name := strings.TrimSuffix(file.Name(), ".index.json")
-			
+
 			// Load index stats (lightweight load if we optimize LoadIndex later, currently full load)
 			// Since we want stats, we might need to load it. For now, let's just peek if already loaded or create minimal info.
-			
+
 			// Check if loaded
 			var docCount, chunkCount int
 			if idx, ok := s.indexes[name]; ok {

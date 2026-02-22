@@ -113,7 +113,6 @@ type LINEConfig struct {
 	AllowFrom          FlexibleStringSlice `json:"allow_from" env:"RDXCLAW_CHANNELS_LINE_ALLOW_FROM"`
 }
 
-
 type HeartbeatConfig struct {
 	Enabled  bool `json:"enabled" env:"RDXCLAW_HEARTBEAT_ENABLED"`
 	Interval int  `json:"interval" env:"RDXCLAW_HEARTBEAT_INTERVAL"` // minutes, min 5
@@ -225,13 +224,13 @@ func DefaultConfig() *Config {
 			},
 		},
 		Providers: ProvidersConfig{
-			Anthropic:    ProviderConfig{},
-			OpenAI:       ProviderConfig{},
-			OpenRouter:   ProviderConfig{},
-			Groq:         ProviderConfig{},
-			VLLM:         ProviderConfig{},
-			Gemini:       ProviderConfig{},
-			Nvidia:       ProviderConfig{},
+			Anthropic:  ProviderConfig{},
+			OpenAI:     ProviderConfig{},
+			OpenRouter: ProviderConfig{},
+			Groq:       ProviderConfig{},
+			VLLM:       ProviderConfig{},
+			Gemini:     ProviderConfig{},
+			Nvidia:     ProviderConfig{},
 		},
 		Gateway: GatewayConfig{
 			Host: "0.0.0.0",

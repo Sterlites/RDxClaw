@@ -28,7 +28,7 @@ type Options struct {
 	Force         bool
 	Refresh       bool
 	OpenClawHome  string
-	rdxclawHome  string
+	rdxclawHome   string
 }
 
 type Action struct {

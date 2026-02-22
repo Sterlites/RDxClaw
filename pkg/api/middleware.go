@@ -81,11 +81,11 @@ func CORSMiddleware(origins []string, next http.Handler) http.Handler {
 
 // RateLimiter implements a simple per-IP token bucket rate limiter.
 type RateLimiter struct {
-	mu       sync.Mutex
-	buckets  map[string]*bucket
-	rate     int           // requests per window
-	window   time.Duration // window duration
-	cleanup  time.Duration // cleanup interval
+	mu      sync.Mutex
+	buckets map[string]*bucket
+	rate    int           // requests per window
+	window  time.Duration // window duration
+	cleanup time.Duration // cleanup interval
 }
 
 type bucket struct {

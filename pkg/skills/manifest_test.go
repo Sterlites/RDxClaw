@@ -11,9 +11,9 @@ import (
 
 func TestManifestValidation(t *testing.T) {
 	tests := []struct {
-		name      string
-		manifest  SkillManifest
-		wantError bool
+		name        string
+		manifest    SkillManifest
+		wantError   bool
 		errContains string
 	}{
 		{
@@ -199,8 +199,8 @@ func TestSaveManifest(t *testing.T) {
 
 func TestManifestHelpers(t *testing.T) {
 	m := &SkillManifest{
-		Name:    "test",
-		Version: "1.0.0",
+		Name:        "test",
+		Version:     "1.0.0",
 		Description: "test",
 		EnvVars: []EnvVarSpec{
 			{Name: "KEY1", Required: true},

@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Sterlites/RDxClaw/pkg/auth"
+	"github.com/Sterlites/RDxClaw/pkg/logger"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/responses"
-	"github.com/Sterlites/RDxClaw/pkg/auth"
-	"github.com/Sterlites/RDxClaw/pkg/logger"
 )
 
 const codexDefaultModel = "gpt-5.2"

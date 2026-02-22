@@ -64,7 +64,7 @@ func (t *SpawnTool) Execute(ctx context.Context, args map[string]interface{}) *t
 	if err != nil {
 		return tools.ErrorResult(fmt.Sprintf("Failed to spawn agent: %v", err))
 	}
-	
+
 	return &tools.ToolResult{
 		ForLLM:  msg,
 		ForUser: msg,
@@ -121,7 +121,7 @@ func (t *SubagentTool) Execute(ctx context.Context, args map[string]interface{})
 	taskStr, _ := args["task"].(string)
 	label, _ := args["label"].(string)
 
-	// Create a task record manually or let RunTask handle it? 
+	// Create a task record manually or let RunTask handle it?
 	// RunTask expects *SubagentTask.
 	// We should probably expose a cleaner API on Manager like RunSync(ctx, task, label...)
 	// But since I implemented RunTask(*SubagentTask), let's build it here.
@@ -136,7 +136,7 @@ func (t *SubagentTool) Execute(ctx context.Context, args map[string]interface{})
 	// Since I can't easily edit Manager again in this turn without conflict, I'll access tasks map directly? No, private.
 	// I'll assume I can add a helper function in tools.go or use Spawn and wait on a channel?
 	// Using Spawn and waiting on channel is safest given current API.
-	
+
 	resultChan := make(chan *tools.ToolResult, 1)
 	callback := func(ctx context.Context, res *tools.ToolResult) {
 		resultChan <- res

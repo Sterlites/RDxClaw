@@ -6,13 +6,13 @@ import "time"
 
 // ChatCompletionRequest mirrors the OpenAI chat completion request format.
 type ChatCompletionRequest struct {
-	Model       string           `json:"model,omitempty"`
-	Messages    []ChatMessage    `json:"messages"`
-	Stream      bool             `json:"stream,omitempty"`
-	MaxTokens   int              `json:"max_tokens,omitempty"`
-	Temperature *float64         `json:"temperature,omitempty"`
-	SessionKey  string           `json:"session_key,omitempty"` // RDxClaw extension
-	Channel     string           `json:"channel,omitempty"`     // RDxClaw extension
+	Model       string        `json:"model,omitempty"`
+	Messages    []ChatMessage `json:"messages"`
+	Stream      bool          `json:"stream,omitempty"`
+	MaxTokens   int           `json:"max_tokens,omitempty"`
+	Temperature *float64      `json:"temperature,omitempty"`
+	SessionKey  string        `json:"session_key,omitempty"` // RDxClaw extension
+	Channel     string        `json:"channel,omitempty"`     // RDxClaw extension
 }
 
 // ChatMessage represents a single message in the chat.
@@ -23,12 +23,12 @@ type ChatMessage struct {
 
 // ChatCompletionResponse mirrors the OpenAI chat completion response format.
 type ChatCompletionResponse struct {
-	ID      string                   `json:"id"`
-	Object  string                   `json:"object"`
-	Created int64                    `json:"created"`
-	Model   string                   `json:"model"`
-	Choices []ChatCompletionChoice   `json:"choices"`
-	Usage   *ChatCompletionUsage     `json:"usage,omitempty"`
+	ID      string                 `json:"id"`
+	Object  string                 `json:"object"`
+	Created int64                  `json:"created"`
+	Model   string                 `json:"model"`
+	Choices []ChatCompletionChoice `json:"choices"`
+	Usage   *ChatCompletionUsage   `json:"usage,omitempty"`
 }
 
 // ChatCompletionChoice represents a single completion choice.
@@ -80,7 +80,7 @@ type StatusResponse struct {
 	Status    string                 `json:"status"`
 	Version   string                 `json:"version"`
 	Uptime    string                 `json:"uptime"`
-	StartedAt time.Time             `json:"started_at"`
+	StartedAt time.Time              `json:"started_at"`
 	Agent     AgentStatus            `json:"agent"`
 	Skills    SkillsStatus           `json:"skills"`
 	Cron      map[string]interface{} `json:"cron,omitempty"`

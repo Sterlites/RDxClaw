@@ -30,12 +30,12 @@ type Posting struct {
 
 // Index implements a simple BM25 search index.
 type Index struct {
-	Name        string             `json:"name"`
-	Docs        map[string]Chunk   `json:"docs"`        // Map of ChunkID -> Chunk
+	Name        string               `json:"name"`
+	Docs        map[string]Chunk     `json:"docs"`         // Map of ChunkID -> Chunk
 	InvertedIdx map[string][]Posting `json:"inverted_idx"` // Map of Term -> []Posting
-	DocLengths  map[string]int     `json:"doc_lengths"`  // Map of ChunkID -> WordCount
-	DocCount    int                `json:"doc_count"`
-	SumDocLen   int                `json:"sum_doc_len"` // Sum of all document lengths
+	DocLengths  map[string]int       `json:"doc_lengths"`  // Map of ChunkID -> WordCount
+	DocCount    int                  `json:"doc_count"`
+	SumDocLen   int                  `json:"sum_doc_len"` // Sum of all document lengths
 	mu          sync.RWMutex
 }
 
@@ -67,7 +67,7 @@ func (idx *Index) AddDocument(doc Document) error {
 
 		// Store chunk
 		idx.Docs[chunkID] = chunk
-		
+
 		// Tokenize and calculate TF
 		tokens := tokenize(content)
 		docLen := len(tokens)
@@ -120,10 +120,10 @@ func (idx *Index) Search(query string, limit int) ([]SearchResult, error) {
 		for _, posting := range postings {
 			chunkID := posting.ChunkID
 			tf := float64(posting.TF)
-			
+
 			// Use cached doc length
 			docLen := float64(idx.DocLengths[chunkID])
-			
+
 			// BM25 Score formula
 			numerator := tf * (k1 + 1)
 			denominator := tf + k1*(1-b+b*(docLen/avgDocLen))
@@ -195,7 +195,6 @@ func LoadIndex(name, dir string) (*Index, error) {
 	return &idx, nil
 }
 
-
 // --- Helpers ---
 
 var tokenRegexp = regexp.MustCompile(`[a-zA-Z0-9]+`)
@@ -212,7 +211,7 @@ func chunkText(text string, size, overlap int) []string {
 
 	var chunks []string
 	runes := []rune(text)
-	
+
 	for i := 0; i < len(runes); i += (size - overlap) {
 		end := i + size
 		if end > len(runes) {

@@ -72,7 +72,6 @@ func (m *Manager) initChannels() error {
 		}
 	}
 
-
 	if m.config.Channels.Discord.Enabled && m.config.Channels.Discord.Token != "" {
 		logger.DebugC("channels", "Attempting to initialize Discord channel")
 		discord, err := NewDiscordChannel(m.config.Channels.Discord, m.bus)
@@ -85,9 +84,6 @@ func (m *Manager) initChannels() error {
 			logger.InfoC("channels", "Discord channel enabled successfully")
 		}
 	}
-
-
-
 
 	if m.config.Channels.Slack.Enabled && m.config.Channels.Slack.BotToken != "" {
 		logger.DebugC("channels", "Attempting to initialize Slack channel")
@@ -114,7 +110,6 @@ func (m *Manager) initChannels() error {
 			logger.InfoC("channels", "LINE channel enabled successfully")
 		}
 	}
-
 
 	logger.InfoCF("channels", "Channel initialization completed", map[string]interface{}{
 		"enabled_channels": len(m.channels),

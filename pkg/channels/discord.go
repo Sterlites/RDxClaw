@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bwmarrin/discordgo"
 	"github.com/Sterlites/RDxClaw/pkg/bus"
 	"github.com/Sterlites/RDxClaw/pkg/config"
 	"github.com/Sterlites/RDxClaw/pkg/logger"
 	"github.com/Sterlites/RDxClaw/pkg/utils"
 	"github.com/Sterlites/RDxClaw/pkg/voice"
+	"github.com/bwmarrin/discordgo"
 )
 
 const (

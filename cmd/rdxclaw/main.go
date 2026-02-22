@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/chzyer/readline"
 	"github.com/Sterlites/RDxClaw/pkg/agent"
 	"github.com/Sterlites/RDxClaw/pkg/api"
 	"github.com/Sterlites/RDxClaw/pkg/auth"
@@ -40,6 +39,7 @@ import (
 	"github.com/Sterlites/RDxClaw/pkg/state"
 	"github.com/Sterlites/RDxClaw/pkg/tools"
 	"github.com/Sterlites/RDxClaw/pkg/voice"
+	"github.com/chzyer/readline"
 )
 
 //go:generate cp -r ../../workspace .
@@ -385,7 +385,7 @@ func swarmCmd() {
 	}
 
 	command := os.Args[2]
-	
+
 	// Load config for API details
 	cfg, err := loadConfig()
 	if err != nil {
@@ -399,21 +399,21 @@ func swarmCmd() {
 	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
-	
+
 	switch command {
 	case "list":
 		req, _ := http.NewRequest("GET", baseURL+"/agents", nil)
 		if cfg.API.APIKey != "" {
 			req.Header.Set("Authorization", "Bearer "+cfg.API.APIKey)
 		}
-		
+
 		resp, err := client.Do(req)
 		if err != nil {
 			fmt.Printf("Error connecting to server: %v\n", err)
 			os.Exit(1)
 		}
 		defer resp.Body.Close()
-		
+
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
 			fmt.Printf("Error: Server returned %s\n%s\n", resp.Status, string(body))
@@ -429,17 +429,17 @@ func swarmCmd() {
 				Created int64  `json:"created"`
 			} `json:"agents"`
 		}
-		
+
 		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 			fmt.Printf("Error parsing response: %v\n", err)
 			os.Exit(1)
 		}
-		
+
 		if len(result.Agents) == 0 {
 			fmt.Println("No active swarm agents.")
 			return
 		}
-		
+
 		fmt.Println("Active Swarm Agents:")
 		fmt.Printf("%-10s %-15s %-10s %s\n", "ID", "LABEL", "STATUS", "TASK")
 		fmt.Println(strings.Repeat("-", 60))
@@ -457,25 +457,25 @@ func swarmCmd() {
 			return
 		}
 		agentID := os.Args[3]
-		
+
 		req, _ := http.NewRequest("DELETE", baseURL+"/agents/"+agentID, nil)
 		if cfg.API.APIKey != "" {
 			req.Header.Set("Authorization", "Bearer "+cfg.API.APIKey)
 		}
-		
+
 		resp, err := client.Do(req)
 		if err != nil {
 			fmt.Printf("Error connecting to server: %v\n", err)
 			os.Exit(1)
 		}
 		defer resp.Body.Close()
-		
+
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
 			fmt.Printf("Error: Server returned %s\n%s\n", resp.Status, string(body))
 			os.Exit(1)
 		}
-		
+
 		fmt.Printf("Agent %s killed successfully.\n", agentID)
 
 	default:
@@ -862,8 +862,8 @@ func serverCmd() {
 
 	msgBus := bus.NewMessageBus()
 	agentLoop := agent.NewAgentLoop(cfg, msgBus, provider)
-    
-    // Initialize skills loader
+
+	// Initialize skills loader
 	workspace := cfg.WorkspacePath()
 	globalDir := filepath.Dir(getConfigPath())
 	globalSkillsDir := filepath.Join(globalDir, "skills")
@@ -873,14 +873,14 @@ func serverCmd() {
 	// Setup cron service
 	cronService := setupCronTool(agentLoop, msgBus, cfg.WorkspacePath(), cfg.Agents.Defaults.RestrictToWorkspace)
 
-    // Setup heartbeat
+	// Setup heartbeat
 	heartbeatService := heartbeat.NewHeartbeatService(
 		cfg.WorkspacePath(),
 		cfg.Heartbeat.Interval,
 		cfg.Heartbeat.Enabled,
 	)
 	heartbeatService.SetBus(msgBus)
-    // Heartbeat for server uses internal processing
+	// Heartbeat for server uses internal processing
 	heartbeatService.SetHandler(func(prompt, channel, chatID string) *tools.ToolResult {
 		response, err := agentLoop.ProcessHeartbeat(context.Background(), prompt, "server", "heartbeat")
 		if err != nil {
@@ -914,25 +914,25 @@ func serverCmd() {
 	if err := heartbeatService.Start(); err != nil {
 		fmt.Printf("Error starting heartbeat service: %v\n", err)
 	}
-    
-    // Start agent loop in background
+
+	// Start agent loop in background
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-    go agentLoop.Run(ctx)
+	go agentLoop.Run(ctx)
 
-    // Setup graceful shutdown
+	// Setup graceful shutdown
 	go func() {
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, os.Interrupt)
 		<-sigChan
 		fmt.Println("\nShutting down...")
-        cronService.Stop()
-        heartbeatService.Stop()
-        agentLoop.Stop()
+		cronService.Stop()
+		heartbeatService.Stop()
+		agentLoop.Stop()
 		os.Exit(0)
 	}()
 
-    // Start server (blocks)
+	// Start server (blocks)
 	if err := srv.Start(); err != nil {
 		fmt.Printf("Server error: %v\n", err)
 		os.Exit(1)

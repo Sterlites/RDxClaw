@@ -115,7 +115,7 @@ func TestStorePersistence(t *testing.T) {
 
 func TestLargeDocChunking(t *testing.T) {
 	idx := NewIndex("test")
-	
+
 	// Create large content
 	largeContent := "word "
 	for i := 0; i < 2000; i++ {
@@ -132,7 +132,7 @@ func TestLargeDocChunking(t *testing.T) {
 
 	// Should be chunked
 	assert.Greater(t, len(idx.Docs), 5) // at least several chunks
-	
+
 	// Verify all chunks belong to doc
 	for _, chunk := range idx.Docs {
 		assert.Equal(t, "large1", chunk.DocumentID)

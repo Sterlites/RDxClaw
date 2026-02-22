@@ -10,8 +10,8 @@ type Document struct {
 	Title     string                 `json:"title,omitempty"`
 	Content   string                 `json:"content"` // Full content (optional to store)
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt time.Time             `json:"created_at"`
-	UpdatedAt time.Time             `json:"updated_at"`
+	CreatedAt time.Time              `json:"created_at"`
+	UpdatedAt time.Time              `json:"updated_at"`
 }
 
 // Chunk represents a segment of a document for indexing
