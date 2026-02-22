@@ -33,7 +33,23 @@ jobs:
         username: ${{ secrets.VPS_USER }}
         key: ${{ secrets.VPS_SSH_KEY }}
         script: |
-          sudo -n mv /tmp/rdxclaw /usr/local/bin/rdxclaw
-          sudo -n chmod +x /usr/local/bin/rdxclaw
-          sudo -n systemctl restart rdxclaw || sudo -n systemctl start rdxclaw
-          sudo -n systemctl status rdxclaw --no-pager -l
+          # Deploy as deploy user (no sudo needed)
+          mv /tmp/rdxclaw ~/rdxclaw
+          chmod +x ~/rdxclaw
+          
+          # Kill existing process + start new
+          pkill -f rdxclaw || true
+          sleep 2
+          nohup ~/rdxclaw > ~/rdxclaw.log 2>&1 &
+          
+          # Verify running
+          sleep 3
+          if pgrep -f rdxclaw > /dev/null; then
+            echo "✅ RDxClaw LIVE!"
+            ps aux | grep rdxclaw | grep -v grep
+            tail -n 10 ~/rdxclaw.log
+          else
+            echo "❌ Failed to start"
+            tail -n 20 ~/rdxclaw.log
+            exit 1
+          fi
