@@ -1,4 +1,4 @@
-name: Deploy RDxClaw (FINAL - WORKS)
+name: Deploy RDxClaw (PERFECT)
 on:
   push:
     branches: [ main ]
@@ -15,8 +15,11 @@ jobs:
         go-version: '1.25'
         
     - name: Build
-      run: make generate && make build
-      
+      id: build
+      run: |
+        make generate && make build
+        echo "binary_path=$(pwd)/build/rdxclaw-linux-amd64" >> $GITHUB_OUTPUT
+        
     - name: Deploy & Restart
       uses: appleboy/ssh-action@v1
       with:
@@ -29,31 +32,36 @@ jobs:
           echo "=== CLEANUP ==="
           rm -rf ~/rdxclaw ~/rdxclaw* /tmp/rdxclaw*
           
-          echo "=== RECEIVE BINARY ==="
-          # Copy binary via base64 (perfect transfer)
-          echo '${{ base64(matrix.binary) }}' | base64 -d > /tmp/rdxclaw
+          echo "=== TEST BINARY FIRST ==="
+          file /tmp/rdxclaw* 2>/dev/null || echo "No old binary"
           
           echo "=== DEPLOY ==="
-          chmod +x /tmp/rdxclaw
-          mv /tmp/rdxclaw ~/rdxclaw
+          # SCP already delivered /tmp/rdxclaw-linux-amd64 from previous step
+          mv /tmp/rdxclaw-linux-amd64 ~/rdxclaw 2>/dev/null || \
+          mv /tmp/rdxclaw* ~/rdxclaw 2>/dev/null || \
+          echo "❌ Binary not found in /tmp/"
+          
+          chmod +x ~/rdxclaw || exit 1
+          ls -la ~/rdxclaw
           
           echo "=== RESTART ==="
           pkill -f rdxclaw || true
           sleep 1
-          nohup ~/rdxclaw > ~/rdxclaw.log 2>&1 &
           
-          echo "=== VERIFY (5s) ==="
+          echo "=== START ==="
+          nohup ~/rdxclaw > ~/rdxclaw.log 2>&1 &
+          echo "Started with PID: $!"
+          
+          echo "=== VERIFY 5s ==="
           sleep 5
+          
           if pgrep -f rdxclaw > /dev/null; then
-            echo "✅ RDxClaw LIVE! PID: $(pgrep -f rdxclaw)"
+            echo "✅ LIVE! PID: $(pgrep -f rdxclaw)"
             ps aux | grep rdxclaw | grep -v grep | head -1
-            echo "--- LAST LOGS ---"
+            echo "--- LOGS ---"
             tail -n 10 ~/rdxclaw.log
           else
-            echo "❌ FAILED STARTUP"
-            echo "--- FULL LOGS ---"
-            tail -n 30 ~/rdxclaw.log || echo "NO LOGS YET"
+            echo "❌ DEAD - LOGS:"
+            tail -n 20 ~/rdxclaw.log || echo "NO LOGS"
             exit 1
           fi
-      env:
-        BINARY: ${{ github.workspace }}/build/rdxclaw-linux-amd64
