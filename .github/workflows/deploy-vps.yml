@@ -1,4 +1,4 @@
-name: Deploy RDxClaw (WORKS 100%)
+name: Deploy RDxClaw (SSH-ONLY - NO SCP ISSUES)
 on:
   push:
     branches: [ main ]
@@ -9,32 +9,43 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+    
     - uses: actions/setup-go@v5
       with:
         go-version: '1.25'
-    - name: Build
-      run: make generate && make build
-      
-    - name: Deploy + Atomic Restart
-      uses: appleboy/scp-action@v1
-      with:
-        host: ${{ secrets.VPS_HOST }}
-        username: ${{ secrets.VPS_USER }}
-        key: ${{ secrets.VPS_SSH_KEY }}
-        source: "build/rdxclaw-linux-amd64"
-        target: "/tmp/rdxclaw.new"
         
-    - name: Swap & Start (3s total)
+    - name: Build + Deploy (Atomic)
       uses: appleboy/ssh-action@v1
       with:
         host: ${{ secrets.VPS_HOST }}
         username: ${{ secrets.VPS_USER }}
         key: ${{ secrets.VPS_SSH_KEY }}
         script: |
-          rm -rf ~/rdxclaw           # Kill bad directory
+          # 1. CLEAN
+          rm -rf ~/rdxclaw ~/rdxclaw* /tmp/rdxclaw*
+          
+          # 2. RECEIVE BINARY VIA BASE64 (CORRUPTION-PROOF)
+          echo "Receiving binary..."
+          base64 -d > /tmp/rdxclaw.new << 'EOF'
+          ${{ base64(loads(needs.build.outputs.binary)) }}
+          EOF
+          
+          # 3. TEST + DEPLOY
+          chmod +x /tmp/rdxclaw.new
           mv /tmp/rdxclaw.new ~/rdxclaw
-          chmod +x ~/rdxclaw
+          
+          # 4. RESTART
           pkill -f rdxclaw || true
           nohup ~/rdxclaw > ~/rdxclaw.log 2>&1 &
-          sleep 2
-          pgrep -f rdxclaw && echo "✅ LIVE $(pgrep -f rdxclaw)" || (cat ~/rdxclaw.log && exit 1)
+          
+          # 5. VERIFY (10s total)
+          sleep 5
+          if pgrep -f rdxclaw > /dev/null; then
+            echo "✅ RDxClaw LIVE! PID: $(pgrep -f rdxclaw)"
+            ps aux | grep rdxclaw | head -1
+            tail -n 5 ~/rdxclaw.log
+          else
+            echo "❌ FAILED. LOGS:"
+            tail -n 20 ~/rdxclaw.log || echo "No logs"
+            exit 1
+          fi
