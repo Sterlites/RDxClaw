@@ -30,28 +30,29 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         source: "build/rdxclaw-linux-amd64"
         target: "/tmp/rdxclaw.new"
-        overwrite: true
 
-    - name: 🔄 Update & Restart Service
+    - name: 🔄 Deploy & Restart
       uses: appleboy/ssh-action@v1
       with:
         host: ${{ secrets.VPS_HOST }}
         username: ${{ secrets.VPS_USER }}
         key: ${{ secrets.VPS_SSH_KEY }}
         script: |
-          # Stop service first (ignore errors)
+          set -e
+          
+          # Stop service
           sudo systemctl stop rdxclaw || true
           
-          # Backup old binary (ignore errors)
-          sudo mv /usr/local/bin/rdxclaw /usr/local/bin/rdxclaw.backup 2>/dev/null || true
+          # Backup old binary
+          [ -f /usr/local/bin/rdxclaw ] && sudo mv /usr/local/bin/rdxclaw /usr/local/bin/rdxclaw.backup
           
           # Deploy new binary
           sudo mv /tmp/rdxclaw.new /usr/local/bin/rdxclaw
           sudo chmod +x /usr/local/bin/rdxclaw
           
-          # Create systemd service if missing
+          # Ensure systemd service exists
           if [ ! -f /etc/systemd/system/rdxclaw.service ]; then
-            sudo tee /etc/systemd/system/rdxclaw.service > /dev/null << 'EOF'
+            cat >/tmp/rdxclaw.service <<'SERVICE'
 [Unit]
 Description=RDX Claw Agent
 After=network.target
@@ -65,22 +66,23 @@ RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
-EOF
-            sudo systemctl daemon-reload
+SERVICE
+            
+            sudo mv /tmp/rdxclaw.service /etc/systemd/system/rdxclaw.service
           fi
           
-          # Start service
+          # Reload and restart
           sudo systemctl daemon-reload
           sudo systemctl enable rdxclaw
           sudo systemctl restart rdxclaw
           
-          # Verify (wait 3s)
+          # Health check
           sleep 3
           if sudo systemctl is-active --quiet rdxclaw; then
-            echo "✅ RDxClaw deployed and running!"
+            echo "✅ RDxClaw LIVE!"
             sudo systemctl status rdxclaw --no-pager -l
           else
-            echo "❌ Service failed to start"
+            echo "❌ FAILED"
             sudo journalctl -u rdxclaw -n 20 --no-pager
             exit 1
           fi
