@@ -24,12 +24,12 @@ fi
 chmod +x "$BINARY_PATH"
 
 # 2. Config Check
-CONFIG_DIR="$HOME/.config/$APP_NAME"
+CONFIG_DIR="$HOME/.rdxclaw"
 mkdir -p "$CONFIG_DIR"
 if [ ! -f "$CONFIG_DIR/config.json" ]; then
     echo "⚠️ Warning: No config.json found in $CONFIG_DIR"
     echo "Initializing default config..."
-    "$BINARY_PATH" onboard <<EOF
+    "$BINARY_PATH" onboard --non-interactive <<EOF
 3
 EOF
 fi
@@ -75,3 +75,20 @@ echo "📊 Status Check:"
 sleep 2
 ps aux | grep "$APP_NAME server" | grep -v grep
 tail -n 20 "$LOG_FILE"
+
+# 4. Local Health Check
+echo "🔍 Performing local health check..."
+MAX_RETRIES=6
+RETRY_COUNT=0
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    if curl -s -f http://localhost:8080/health > /dev/null; then
+        echo "✅ Local health check passed!"
+        exit 0
+    fi
+    echo "Wait for service to initialize... ($((RETRY_COUNT+1))/$MAX_RETRIES)"
+    RETRY_COUNT=$((RETRY_COUNT+1))
+    sleep 5
+done
+
+echo "❌ Local health check failed after $MAX_RETRIES attempts"
+exit 1

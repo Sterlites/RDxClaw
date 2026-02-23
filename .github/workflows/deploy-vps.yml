@@ -49,10 +49,3 @@ jobs:
           chmod +x ~/scripts/deploy.sh
           ~/scripts/deploy.sh
 
-    - name: Verify Health
-      run: |
-        echo "Waiting for service to stabilize..."
-        sleep 15
-        curl -f http://${{ secrets.VPS_HOST }}:8080/health || (echo "❌ Health check failed" && exit 1)
-        echo "✅ Service is up and healthy"
-
