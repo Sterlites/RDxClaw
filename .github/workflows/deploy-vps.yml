@@ -27,6 +27,16 @@ jobs:
         target: "/tmp/"
         overwrite: true
 
+    - name: SCP Scripts
+      uses: appleboy/scp-action@v1
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        source: "scripts/deploy.sh"
+        target: "~/scripts"
+        overwrite: true
+
     - name: Deploy & Start
       uses: appleboy/ssh-action@v1
       with:
@@ -34,29 +44,13 @@ jobs:
         username: ${{ secrets.VPS_USER }}
         key: ${{ secrets.VPS_SSH_KEY }}
         script: |
-          set -e
-          echo "=== CLEANUP ==="
-          rm -rf ~/rdxclaw* || true
-          pkill -f rdxclaw || true
-          sleep 3
+          chmod +x ~/scripts/scripts/deploy.sh
+          ~/scripts/scripts/deploy.sh
 
-          echo "=== TRANSFER ==="
-          BINARY_PATH=$(find /tmp -name rdxclaw-linux-amd64 -type f | head -1)
-          [ -n "$BINARY_PATH" ] || { echo "❌ No binary"; exit 1; }
-          mv "$BINARY_PATH" ~/rdxclaw
-          chmod +x ~/rdxclaw
+    - name: Verify Health
+      run: |
+        echo "Waiting for service to stabilize..."
+        sleep 15
+        curl -f http://${{ secrets.VPS_HOST }}:8080/health || (echo "❌ Health check failed" && exit 1)
+        echo "✅ Service is up and healthy"
 
-          echo "=== CONFIG CHECK ==="
-          if [ ! -f ~/.config/rdxclaw/config.json ] || [ ! -s ~/.config/rdxclaw/config.json ]; then
-            echo "⚠️ No config - needs manual setup first"
-            echo "ssh $USER@$HOSTNAME '~/rdxclaw'"
-            exit 0
-          fi
-
-          echo "=== RESTART LIVE ==="
-          pkill -f rdxclaw || true
-          nohup ~/rdxclaw > ~/rdxclaw.log 2>&1 &
-          sleep 10
-
-          echo "✅ LIVE - Logs:"
-          tail -20 ~/rdxclaw.log

@@ -58,7 +58,6 @@ func (s *Server) Start() error {
 	mux.HandleFunc("POST /v1/webhooks/", s.handleWebhook) // catch-all for webhook paths
 	mux.HandleFunc("GET /v1/status", s.handleStatus)
 	mux.HandleFunc("GET /v1/skills", s.handleListSkills)
-	mux.HandleFunc("GET /v1/skills", s.handleListSkills)
 	mux.HandleFunc("GET /v1/agents", s.handleListAgents)
 	mux.HandleFunc("DELETE /v1/agents/{id}", s.handleKillAgent)
 	mux.HandleFunc("GET /health", s.handleHealth)
@@ -284,10 +283,6 @@ func (s *Server) handleListSkills(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"skills": items,
-		"total":  len(items),
-	})
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"skills": items,
 		"total":  len(items),

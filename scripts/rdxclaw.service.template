@@ -1,0 +1,18 @@
+[Unit]
+Description=RDxClaw Agent Service
+After=network.target
+
+[Service]
+Type=simple
+User={{USER}}
+WorkingDirectory={{HOME}}
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart={{HOME}}/rdxclaw server --port {{PORT}}
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=0
+StandardOutput=append:{{HOME}}/rdxclaw.log
+StandardError=append:{{HOME}}/rdxclaw.log
+
+[Install]
+WantedBy=multi-user.target
