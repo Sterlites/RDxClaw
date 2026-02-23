@@ -10,7 +10,10 @@ SERVICE_NAME="$APP_NAME.service"
 echo "🚀 Starting Deployment for $APP_NAME"
 
 # 1. Prepare Binary
-if [ -f "/tmp/$APP_NAME-linux-amd64" ]; then
+if [ -f "/tmp/build/$APP_NAME-linux-amd64" ]; then
+    echo "📦 Moving binary from /tmp/build..."
+    mv "/tmp/build/$APP_NAME-linux-amd64" "$BINARY_PATH"
+elif [ -f "/tmp/$APP_NAME-linux-amd64" ]; then
     echo "📦 Moving binary from /tmp..."
     mv "/tmp/$APP_NAME-linux-amd64" "$BINARY_PATH"
 elif [ -f "/tmp/$APP_NAME" ]; then

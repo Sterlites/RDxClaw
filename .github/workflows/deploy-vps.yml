@@ -25,6 +25,7 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         source: "build/rdxclaw-linux-amd64"
         target: "/tmp/"
+        strip_components: 1
         overwrite: true
 
     - name: SCP Scripts
@@ -35,6 +36,7 @@ jobs:
         key: ${{ secrets.VPS_SSH_KEY }}
         source: "scripts/deploy.sh"
         target: "~/scripts"
+        strip_components: 1
         overwrite: true
 
     - name: Deploy & Start
@@ -44,8 +46,8 @@ jobs:
         username: ${{ secrets.VPS_USER }}
         key: ${{ secrets.VPS_SSH_KEY }}
         script: |
-          chmod +x ~/scripts/scripts/deploy.sh
-          ~/scripts/scripts/deploy.sh
+          chmod +x ~/scripts/deploy.sh
+          ~/scripts/deploy.sh
 
     - name: Verify Health
       run: |
