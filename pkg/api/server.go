@@ -62,7 +62,31 @@ func (s *Server) Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to prepare embedded web fs: %v", err)
 	}
-	mux.Handle("/", http.FileServer(http.FS(webContent)))
+	fileServer := http.FileServer(http.FS(webContent))
+	
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// If the path is exactly "/", serve index.html directly from the embedded FS
+		if r.URL.Path == "/" {
+			html, err := webContent.Open("index.html")
+			if err != nil {
+				http.Error(w, "Mission Control UI not found", http.StatusNotFound)
+				return
+			}
+			defer html.Close()
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			io.Copy(w, html)
+			return
+		}
+		
+		// Map /css/* and /js/* to the embedded FS directly
+		if strings.HasPrefix(r.URL.Path, "/css/") || strings.HasPrefix(r.URL.Path, "/js/") {
+			fileServer.ServeHTTP(w, r)
+			return
+		}
+		
+		// Anything else unknown at root will simply get a 404, but API routes below will take priority
+		http.NotFound(w, r)
+	})
 
 	// Register routes
 	mux.HandleFunc("POST /v1/chat/completions", s.handleChatCompletion)
