@@ -13,14 +13,22 @@ import (
 // AuthMiddleware validates the API key from the Authorization header.
 func AuthMiddleware(apiKey string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Health/status endpoints don't require auth
-		if r.URL.Path == "/v1/status" || r.URL.Path == "/health" || r.URL.Path == "/ready" {
+		// Public endpoints that don't require auth
+		if r.URL.Path == "/v1/status" || r.URL.Path == "/health" || r.URL.Path == "/ready" ||
+			r.URL.Path == "/" || strings.HasPrefix(r.URL.Path, "/css/") || strings.HasPrefix(r.URL.Path, "/js/") {
 			next.ServeHTTP(w, r)
 			return
 		}
 
 		if apiKey == "" {
 			// No API key configured — allow all requests
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Allow local Mission Control UI requests (referer from same host or localhost loopback for convenience)
+		// For a strict production setup, this would be tighter, but for the "out-of-box" GUI, we allow localhost.
+		if strings.HasPrefix(r.RemoteAddr, "127.0.0.1") || strings.HasPrefix(r.RemoteAddr, "[::1]") {
 			next.ServeHTTP(w, r)
 			return
 		}

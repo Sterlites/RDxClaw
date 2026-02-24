@@ -2,9 +2,11 @@ package api
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -14,6 +16,9 @@ import (
 	"github.com/Sterlites/RDxClaw/pkg/bus"
 	"github.com/Sterlites/RDxClaw/pkg/skills"
 )
+
+//go:embed web/*
+var embeddedWebFS embed.FS
 
 // Server is the headless REST API server for RDxClaw.
 // It provides OpenAI-compatible endpoints, skill execution,
@@ -51,6 +56,13 @@ func NewServer(agentLoop *agent.AgentLoop, msgBus *bus.MessageBus, loader *skill
 // Start starts the API server (blocking).
 func (s *Server) Start() error {
 	mux := http.NewServeMux()
+
+	// Embed Frontend Web UI
+	webContent, err := fs.Sub(embeddedWebFS, "web")
+	if err != nil {
+		return fmt.Errorf("failed to prepare embedded web fs: %v", err)
+	}
+	mux.Handle("/", http.FileServer(http.FS(webContent)))
 
 	// Register routes
 	mux.HandleFunc("POST /v1/chat/completions", s.handleChatCompletion)
