@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -89,7 +90,17 @@ func (s *Server) Start() error {
 	
 	// Serve static files from the embedded FS. 
 	// The pattern "GET /" acts as a catch-all for GET requests not matched by other routes.
-	mux.Handle("GET /", http.FileServer(http.FS(webContent)))
+	
+	// Serve static files from the embedded FS.
+	fileServer := http.FileServer(http.FS(webContent))
+	
+	// Specific handler for root to ensure index.html is served correctly
+	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			r.URL.Path = "/index.html"
+		}
+		fileServer.ServeHTTP(w, r)
+	})
 
 	// Register routes
 	mux.HandleFunc("POST /v1/chat/completions", s.handleChatCompletion)
@@ -321,6 +332,11 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		modelName = m
 	}
 
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	memUsage := fmt.Sprintf("%.2f MB", float64(m.Alloc)/1024/1024)
+	numThreads, _ := runtime.ThreadCreateProfile(nil)
+
 	writeJSON(w, http.StatusOK, StatusResponse{
 		Status:    "ok",
 		Version:   s.version,
@@ -337,6 +353,11 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		},
 		ActiveAgents: swarmCount,
 		RecentEvents: recentEvents,
+		System: SystemStats{
+			MemoryUsage: memUsage,
+			Goroutines:  runtime.NumGoroutine(),
+			Threads:     numThreads,
+		},
 	})
 }
 

@@ -86,6 +86,14 @@ type StatusResponse struct {
 	ActiveAgents int             `json:"active_agents"`
 	RecentEvents []ActivityEvent `json:"recent_events,omitempty"`
 	Cron         map[string]interface{} `json:"cron,omitempty"`
+	System       SystemStats     `json:"system"`
+}
+
+// SystemStats contains Go runtime statistics.
+type SystemStats struct {
+	MemoryUsage string `json:"memory_usage"`
+	Goroutines  int    `json:"goroutines"`
+	Threads     int    `json:"threads"`
 }
 
 // ActivityEvent represents a significant system event for Mission Control.

@@ -54,6 +54,11 @@ async function loadStatus() {
   document.getElementById('modelVal').innerText = data.agent?.model || 'N/A';
   document.getElementById('agentsVal').innerText = data.active_agents || '0';
   document.getElementById('skillsVal').innerText = data.skills?.total || '0';
+  
+  if (data.system) {
+    document.getElementById('memoryVal').innerText = data.system.memory_usage || 'N/A';
+    document.getElementById('goroutinesVal').innerText = data.system.goroutines || '0';
+  }
 
   // Render Activity Feed
   const activityList = document.getElementById('activityList');
@@ -186,7 +191,11 @@ async function executeSkill(skillName) {
 
 // --- Chat functionality ---
 let chatMessages = [
-  { role: 'assistant', content: 'Hello, Commander. Embedded RDxClaw agent ready for input. How can I assist?' }
+  { 
+    role: 'assistant', 
+    content: 'Hello, Commander. Embedded RDxClaw agent ready for input. How can I assist?',
+    timestamp: new Date()
+  }
 ];
 
 function renderChat() {
@@ -196,7 +205,17 @@ function renderChat() {
   chatMessages.forEach(msg => {
     const div = document.createElement('div');
     div.className = `msg ${msg.role}`;
-    div.innerHTML = `<div class="msg-bubble">${escapeHTML(msg.content)}</div>`;
+    
+    const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+    const iconChar = msg.role === 'user' ? 'U' : 'A';
+    
+    div.innerHTML = `
+      <div class="msg-meta">
+        <span class="msg-role">${msg.role}</span>
+        <span class="msg-time">${time}</span>
+      </div>
+      <div class="msg-bubble">${escapeHTML(msg.content)}</div>
+    `;
     container.appendChild(div);
   });
   
@@ -209,7 +228,7 @@ async function sendMessage() {
   if (!text) return;
 
   // Add user msg
-  chatMessages.push({ role: 'user', content: text });
+  chatMessages.push({ role: 'user', content: text, timestamp: new Date() });
   inputEl.value = '';
   renderChat();
 
@@ -229,9 +248,11 @@ async function sendMessage() {
     const data = await res.json();
     
     if (data.choices && data.choices.length > 0) {
-      chatMessages.push(data.choices[0].message);
+      const assistantMsg = data.choices[0].message;
+      assistantMsg.timestamp = new Date();
+      chatMessages.push(assistantMsg);
     } else {
-      chatMessages.push({ role: 'assistant', content: 'Error: Cannot communicate with brain.' });
+      chatMessages.push({ role: 'assistant', content: 'Error: Cannot communicate with brain.', timestamp: new Date() });
     }
   } catch (err) {
     chatMessages.push({ role: 'assistant', content: 'Connection failed.' });

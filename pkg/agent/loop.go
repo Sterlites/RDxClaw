@@ -9,6 +9,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -496,12 +497,14 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 
 			errMsg := strings.ToLower(err.Error())
 			// Check for context window errors (provider specific, but usually contain "token" or "invalid")
-			isContextError := strings.Contains(errMsg, "token") ||
+			isContextWindowError := (strings.Contains(errMsg, "token") ||
 				strings.Contains(errMsg, "context") ||
 				strings.Contains(errMsg, "invalidparameter") ||
-				strings.Contains(errMsg, "length")
+				strings.Contains(errMsg, "length")) &&
+				!errors.Is(err, context.Canceled) &&
+				!errors.Is(err, context.DeadlineExceeded)
 
-			if isContextError && retry < maxRetries {
+			if isContextWindowError && retry < maxRetries {
 				logger.WarnCF("agent", "Context window error detected, attempting compression", map[string]interface{}{
 					"error": err.Error(),
 					"retry": retry,
