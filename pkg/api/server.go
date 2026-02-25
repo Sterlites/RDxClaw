@@ -94,13 +94,20 @@ func (s *Server) Start() error {
 	// Serve static files from the embedded FS.
 	fileServer := http.FileServer(http.FS(webContent))
 	
-	// Specific handler for root to ensure index.html is served correctly
-	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
-			r.URL.Path = "/index.html"
+	// Specific handler for root to ensure index.html is served correctly without redirect loops
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		index, err := fs.ReadFile(webContent, "index.html")
+		if err != nil {
+			slog.Error("failed to read index.html", "error", err)
+			http.NotFound(w, r)
+			return
 		}
-		fileServer.ServeHTTP(w, r)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(index)
 	})
+
+	// Serve other static files (css, js, etc.)
+	mux.Handle("GET /", fileServer)
 
 	// Register routes
 	mux.HandleFunc("POST /v1/chat/completions", s.handleChatCompletion)
