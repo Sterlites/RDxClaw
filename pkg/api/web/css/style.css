@@ -471,7 +471,19 @@ tr:hover td {
   border-radius: 8px;
   background-color: var(--bg-dark);
   border: 1px solid var(--border-subtle);
+  transition: all 0.2s;
 }
+
+.activity-item:hover {
+  background-color: #1a1d23;
+  border-color: #333;
+}
+
+.event-info { border-left: 3px solid #60a5fa; }
+.event-success { border-left: 3px solid #10b981; }
+.event-warning { border-left: 3px solid #f59e0b; }
+.event-error { border-left: 3px solid #ef4444; }
+
 
 .activity-icon {
   width: 24px;

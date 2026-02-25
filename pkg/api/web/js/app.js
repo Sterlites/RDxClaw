@@ -21,12 +21,14 @@ document.querySelectorAll('.nav-item').forEach(el => {
 let refreshInterval;
 document.addEventListener('DOMContentLoaded', () => {
   loadStatus();
-  // Poll every 5 seconds
+  // Poll every 3 seconds
   refreshInterval = setInterval(() => {
+    // Always update status background (for activity feed)
+    loadStatus();
+
     const activeSection = document.querySelector('.section.active');
-    if (activeSection.id === 'dashboard') loadStatus();
     if (activeSection.id === 'swarm') loadAgents();
-  }, 5000);
+  }, 3000);
 });
 
 // --- API Calls ---
@@ -59,7 +61,9 @@ async function loadStatus() {
     activityList.innerHTML = '';
     data.recent_events.forEach(ev => {
       const item = document.createElement('div');
-      item.className = 'activity-item';
+      // ev.type can be 'info', 'success', 'warning', 'error'
+      const statusClass = `event-${(ev.type || 'info').toLowerCase()}`;
+      item.className = `activity-item ${statusClass}`;
       
       const time = new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       const iconChar = ev.source.charAt(0).toUpperCase();
@@ -146,16 +150,37 @@ async function executeSkill(skillName) {
   const input = prompt(`Enter test payload for ${skillName}:`, "Ping");
   if (!input) return;
 
+  const loader = document.getElementById('chatLoader');
+  if (loader) loader.classList.add('active');
+
   try {
     const res = await fetch(`${API_BASE}/skills/${skillName}/execute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ input: input })
     });
-    const result = await res.json();
-    alert(`Execution Result:\n\n${result.Result || result.Error}`);
+    const data = await res.json();
+    
+    // Use correct casing from Go JSON tags
+    const resultText = data.result || data.error || "Skill returned empty response";
+    
+    // Integrate with Chat Terminal for comprehensive visibility
+    chatMessages.push({ role: 'user', content: `[Manual Skill Test: ${skillName}]\nInput: ${input}` });
+    chatMessages.push({ role: 'assistant', content: resultText });
+    renderChat();
+
+    // Still show alert if user isn't looking at the chat
+    const activeSection = document.querySelector('.section.active').id;
+    if (activeSection !== 'chat') {
+      alert(`Skill Execution: ${skillName}\n\n${resultText}`);
+    }
+
   } catch (err) {
-    alert("Skill execution failed.");
+    console.error("Skill execution error:", err);
+    alert("Skill execution failed. See console for details.");
+  } finally {
+    if (loader) loader.classList.remove('active');
+    loadStatus(); // Instant refresh of activity feed
   }
 }
 
