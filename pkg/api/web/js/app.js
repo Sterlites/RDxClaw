@@ -91,12 +91,18 @@ async function loadAgents() {
 
   data.agents.forEach(agent => {
     const tr = document.createElement('tr');
+    // SubagentTask uses 'id', 'task', 'status', 'created'
+    const id = agent.id || agent.ID || 'unknown';
+    const task = agent.task || agent.Task || 'Idle';
+    const status = agent.status || agent.Status || 'Running';
+    const created = agent.created || agent.Created || Date.now();
+    
     tr.innerHTML = `
-      <td><span class="agent-id">${agent.id.substring(0,8)}...</span></td>
-      <td>${agent.task || 'Idle'}</td>
-      <td><span class="badge badge-success">Running</span></td>
-      <td>${Math.round((Date.now() - new Date(agent.startedAt).getTime())/60000)} mins</td>
-      <td><button class="danger" onclick="killAgent('${agent.id}')">Terminate</button></td>
+      <td><span class="agent-id">${id.substring(0,8)}...</span></td>
+      <td>${task}</td>
+      <td><span class="badge ${status === 'running' ? 'badge-success' : 'badge-info'}">${status}</span></td>
+      <td>${Math.round((Date.now() - created)/60000)} mins</td>
+      <td><button class="danger" onclick="killAgent('${id}')">Terminate</button></td>
     `;
     tbody.appendChild(tr);
   });
@@ -120,11 +126,17 @@ async function loadSkills() {
 
   data.skills.forEach(skill => {
     const tr = document.createElement('tr');
+    // Handle both lowercase (from JSON tags) and uppercase (Go field names)
+    const name = skill.name || skill.Name || 'undefined';
+    const desc = skill.description || skill.Description || 'undefined';
+    const source = skill.source || skill.Source || 'undefined';
+    const caps = skill.capabilities || skill.Capabilities || 'None';
+
     tr.innerHTML = `
-      <td><strong>${skill.Name}</strong><div class="skill-desc">${skill.Description}</div></td>
-      <td><span class="badge badge-info">${skill.Source}</span></td>
-      <td>${(skill.Capabilities || []).join(', ') || 'None'}</td>
-      <td><button onclick="executeSkill('${skill.Name}')">Run Test</button></td>
+      <td><strong>${name}</strong><div class="skill-desc">${desc}</div></td>
+      <td><span class="badge badge-info">${source}</span></td>
+      <td>${caps}</td>
+      <td><button onclick="executeSkill('${name}')">Run Test</button></td>
     `;
     tbody.appendChild(tr);
   });
