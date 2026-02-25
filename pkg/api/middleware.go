@@ -152,12 +152,32 @@ func (rl *RateLimiter) cleanupLoop() {
 // RateLimitMiddleware limits requests per IP using a token bucket.
 func RateLimitMiddleware(limiter *RateLimiter, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := r.RemoteAddr
-		if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-			ip = strings.Split(forwarded, ",")[0]
+		// Public/Static assets should not be rate limited to ensure UI remains functional
+		if r.URL.Path == "/" || strings.HasPrefix(r.URL.Path, "/css/") || 
+		   strings.HasPrefix(r.URL.Path, "/js/") || r.URL.Path == "/health" {
+			next.ServeHTTP(w, r)
+			return
 		}
 
-		if !limiter.Allow(strings.TrimSpace(ip)) {
+		rawIP := r.RemoteAddr
+		if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
+			rawIP = strings.Split(forwarded, ",")[0]
+		}
+
+		// Strip port if present
+		ip := strings.TrimSpace(rawIP)
+		if lastColon := strings.LastIndex(ip, ":"); lastColon != -1 && !strings.Contains(ip, "]") {
+			// IPv4 or simple hostname
+			ip = ip[:lastColon]
+		} else if strings.HasPrefix(ip, "[") && strings.Contains(ip, "]:") {
+			// IPv6 with port
+			if lastBracket := strings.LastIndex(ip, "]"); lastBracket != -1 {
+				ip = ip[:lastBracket+1]
+			}
+		}
+
+		if !limiter.Allow(ip) {
+			slog.Warn("rate_limit_tripped", "ip", ip, "path", r.URL.Path)
 			writeError(w, http.StatusTooManyRequests, "rate_limit_exceeded", "Rate limit exceeded. Please retry later.")
 			return
 		}
