@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Sterlites/RDxClaw/pkg/agent"
@@ -30,6 +31,8 @@ type Server struct {
 	config    ServerConfig
 	startedAt time.Time
 	version   string
+	events    []ActivityEvent
+	eventsMu  sync.RWMutex
 }
 
 // ServerConfig holds configuration for the API server.
@@ -43,13 +46,34 @@ type ServerConfig struct {
 
 // NewServer creates a new API server instance.
 func NewServer(agentLoop *agent.AgentLoop, msgBus *bus.MessageBus, loader *skills.SkillsLoader, cfg ServerConfig) *Server {
-	return &Server{
+	s := &Server{
 		agentLoop: agentLoop,
 		msgBus:    msgBus,
 		loader:    loader,
 		config:    cfg,
 		startedAt: time.Now(),
 		version:   "1.0.0",
+		events:    make([]ActivityEvent, 0),
+	}
+	s.recordEvent("system", "success", "RDxClaw Mission Control initialized")
+	return s
+}
+
+func (s *Server) recordEvent(source, eventType, message string) {
+	s.eventsMu.Lock()
+	defer s.eventsMu.Unlock()
+
+	event := ActivityEvent{
+		Timestamp: time.Now(),
+		Source:    source,
+		Type:      eventType,
+		Message:   message,
+	}
+
+	// Keep only the last 50 events
+	s.events = append(s.events, event)
+	if len(s.events) > 50 {
+		s.events = s.events[1:]
 	}
 }
 
@@ -62,31 +86,10 @@ func (s *Server) Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to prepare embedded web fs: %v", err)
 	}
-	fileServer := http.FileServer(http.FS(webContent))
 	
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// If the path is exactly "/", serve index.html directly from the embedded FS
-		if r.URL.Path == "/" {
-			html, err := webContent.Open("index.html")
-			if err != nil {
-				http.Error(w, "Mission Control UI not found", http.StatusNotFound)
-				return
-			}
-			defer html.Close()
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			io.Copy(w, html)
-			return
-		}
-		
-		// Map /css/* and /js/* to the embedded FS directly
-		if strings.HasPrefix(r.URL.Path, "/css/") || strings.HasPrefix(r.URL.Path, "/js/") {
-			fileServer.ServeHTTP(w, r)
-			return
-		}
-		
-		// Anything else unknown at root will simply get a 404, but API routes below will take priority
-		http.NotFound(w, r)
-	})
+	// Serve static files from the embedded FS. 
+	// The pattern "GET /" acts as a catch-all for GET requests not matched by other routes.
+	mux.Handle("GET /", http.FileServer(http.FS(webContent)))
 
 	// Register routes
 	mux.HandleFunc("POST /v1/chat/completions", s.handleChatCompletion)
@@ -163,9 +166,12 @@ func (s *Server) handleChatCompletion(w http.ResponseWriter, r *http.Request) {
 
 	response, err := s.agentLoop.ProcessDirectWithChannel(ctx, userContent, sessionKey, channel, "api")
 	if err != nil {
+		s.recordEvent("agent", "error", fmt.Sprintf("Chat error: %v", err))
 		writeError(w, http.StatusInternalServerError, "processing_error", err.Error())
 		return
 	}
+
+	s.recordEvent("agent", "info", "Processed user request")
 
 	writeJSON(w, http.StatusOK, ChatCompletionResponse{
 		ID:      fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano()),
@@ -218,6 +224,7 @@ func (s *Server) handleSkillExecute(w http.ResponseWriter, r *http.Request) {
 	duration := time.Since(startTime).Milliseconds()
 
 	if err != nil {
+		s.recordEvent("skill", "error", fmt.Sprintf("Skill %s failed: %v", skillName, err))
 		writeJSON(w, http.StatusOK, SkillExecuteResponse{
 			SkillName: skillName,
 			Duration:  duration,
@@ -226,6 +233,7 @@ func (s *Server) handleSkillExecute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.recordEvent("skill", "success", fmt.Sprintf("Executed skill: %s", skillName))
 	writeJSON(w, http.StatusOK, SkillExecuteResponse{
 		SkillName: skillName,
 		Result:    response,
@@ -274,6 +282,8 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		SessionKey: fmt.Sprintf("webhook-%s", webhookPath),
 	})
 
+	s.recordEvent("api", "info", fmt.Sprintf("Webhook received: %s", webhookPath))
+	
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"received": true,
 		"path":     webhookPath,
@@ -291,12 +301,33 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		skillNames[i] = skill.Name
 	}
 
+	s.eventsMu.RLock()
+	recentEvents := make([]ActivityEvent, len(s.events))
+	copy(recentEvents, s.events)
+	s.eventsMu.RUnlock()
+
+	// Reverse events for display (newest first)
+	for i, j := 0, len(recentEvents)-1; i < j; i, j = i+1, j-1 {
+		recentEvents[i], recentEvents[j] = recentEvents[j], recentEvents[i]
+	}
+
+	swarmCount := 0
+	if manager := s.agentLoop.GetSwarmManager(); manager != nil {
+		swarmCount = len(manager.ListAgents())
+	}
+
+	modelName := "Default"
+	if m, ok := startupInfo["model"].(string); ok {
+		modelName = m
+	}
+
 	writeJSON(w, http.StatusOK, StatusResponse{
 		Status:    "ok",
 		Version:   s.version,
 		Uptime:    time.Since(s.startedAt).Round(time.Second).String(),
 		StartedAt: s.startedAt,
 		Agent: AgentStatus{
+			Model:       modelName,
 			ToolsLoaded: toolsInfo["count"].(int),
 		},
 		Skills: SkillsStatus{
@@ -304,6 +335,8 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 			Available: skillsInfo["available"].(int),
 			Names:     skillNames,
 		},
+		ActiveAgents: swarmCount,
+		RecentEvents: recentEvents,
 	})
 }
 

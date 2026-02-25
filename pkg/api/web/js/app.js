@@ -18,8 +18,15 @@ document.querySelectorAll('.nav-item').forEach(el => {
 });
 
 // Initialization
+let refreshInterval;
 document.addEventListener('DOMContentLoaded', () => {
   loadStatus();
+  // Poll every 5 seconds
+  refreshInterval = setInterval(() => {
+    const activeSection = document.querySelector('.section.active');
+    if (activeSection.id === 'dashboard') loadStatus();
+    if (activeSection.id === 'swarm') loadAgents();
+  }, 5000);
 });
 
 // --- API Calls ---
@@ -39,10 +46,37 @@ async function loadStatus() {
   const data = await fetchJSON('/status');
   if (!data) return;
 
-  document.getElementById('uptimeVal').innerText = data.Uptime || 'N/A';
-  document.getElementById('versionVal').innerText = data.Version || 'v1.0.0';
-  document.getElementById('agentsVal').innerText = data.Skills?.Available || '0';
-  document.getElementById('skillsVal').innerText = data.Skills?.Total || '0';
+  document.getElementById('uptimeVal').innerText = data.uptime || 'N/A';
+  document.getElementById('versionVal').innerText = data.version || 'v1.0.0';
+  document.getElementById('sidebarVersion').innerText = `Framework ${data.version || 'v1.0.0'}`;
+  document.getElementById('modelVal').innerText = data.agent?.model || 'N/A';
+  document.getElementById('agentsVal').innerText = data.active_agents || '0';
+  document.getElementById('skillsVal').innerText = data.skills?.total || '0';
+
+  // Render Activity Feed
+  const activityList = document.getElementById('activityList');
+  if (data.recent_events && data.recent_events.length > 0) {
+    activityList.innerHTML = '';
+    data.recent_events.forEach(ev => {
+      const item = document.createElement('div');
+      item.className = 'activity-item';
+      
+      const time = new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const iconChar = ev.source.charAt(0).toUpperCase();
+      
+      item.innerHTML = `
+        <div class="activity-icon icon-${ev.source.toLowerCase()}">${iconChar}</div>
+        <div class="activity-content">
+          <div class="activity-meta">
+            <span class="activity-source">${ev.source}</span>
+            <span class="activity-time">${time}</span>
+          </div>
+          <div class="activity-msg">${ev.message}</div>
+        </div>
+      `;
+      activityList.appendChild(item);
+    });
+  }
 }
 
 async function loadAgents() {

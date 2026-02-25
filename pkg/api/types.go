@@ -77,13 +77,23 @@ type WebhookEvent struct {
 
 // StatusResponse contains the server health and agent status.
 type StatusResponse struct {
-	Status    string                 `json:"status"`
-	Version   string                 `json:"version"`
-	Uptime    string                 `json:"uptime"`
-	StartedAt time.Time              `json:"started_at"`
-	Agent     AgentStatus            `json:"agent"`
-	Skills    SkillsStatus           `json:"skills"`
-	Cron      map[string]interface{} `json:"cron,omitempty"`
+	Status       string          `json:"status"`
+	Version      string          `json:"version"`
+	Uptime       string          `json:"uptime"`
+	StartedAt    time.Time       `json:"started_at"`
+	Agent        AgentStatus     `json:"agent"`
+	Skills       SkillsStatus    `json:"skills"`
+	ActiveAgents int             `json:"active_agents"`
+	RecentEvents []ActivityEvent `json:"recent_events,omitempty"`
+	Cron         map[string]interface{} `json:"cron,omitempty"`
+}
+
+// ActivityEvent represents a significant system event for Mission Control.
+type ActivityEvent struct {
+	Timestamp time.Time `json:"timestamp"`
+	Type      string    `json:"type"`   // "info", "warning", "error", "success"
+	Source    string    `json:"source"` // "agent", "api", "skill", "system"
+	Message   string    `json:"message"`
 }
 
 // AgentStatus contains agent health information.
