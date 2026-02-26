@@ -42,7 +42,7 @@ import (
 	"github.com/chzyer/readline"
 )
 
-//go:generate cp -r ../../workspace .
+//go:generate powershell -Command "if (Test-Path workspace) { Remove-Item -Recurse -Force workspace }; Copy-Item -Recurse ../../workspace ."
 //go:embed workspace
 var embeddedFiles embed.FS
 
