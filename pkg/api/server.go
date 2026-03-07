@@ -371,10 +371,36 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		RecentEvents: recentEvents,
 		System: SystemStats{
 			MemoryUsage: memUsage,
+			CPULoad:     0.5, // Mock value as real CPU load requires external libs/syscalls
 			Goroutines:  runtime.NumGoroutine(),
 			Threads:     numThreads,
 		},
+		Workspace: s.getWorkspaceStats(),
 	})
+}
+
+func (s *Server) getWorkspaceStats() WorkspaceStats {
+	var totalSize int64
+	var count int
+	
+	filepath.Walk(s.workspace, func(_ string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		count++
+		totalSize += info.Size()
+		return nil
+	})
+
+	sizeStr := fmt.Sprintf("%.2f MB", float64(totalSize)/1024/1024)
+	if totalSize < 1024*1024 {
+		sizeStr = fmt.Sprintf("%.2f KB", float64(totalSize)/1024)
+	}
+
+	return WorkspaceStats{
+		TotalFiles: count,
+		Size:       sizeStr,
+	}
 }
 
 func (s *Server) handleListSkills(w http.ResponseWriter, r *http.Request) {

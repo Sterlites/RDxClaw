@@ -87,13 +87,21 @@ type StatusResponse struct {
 	RecentEvents []ActivityEvent `json:"recent_events,omitempty"`
 	Cron         map[string]interface{} `json:"cron,omitempty"`
 	System       SystemStats     `json:"system"`
+	Workspace    WorkspaceStats  `json:"workspace"`
 }
 
 // SystemStats contains Go runtime statistics.
 type SystemStats struct {
-	MemoryUsage string `json:"memory_usage"`
-	Goroutines  int    `json:"goroutines"`
-	Threads     int    `json:"threads"`
+	MemoryUsage string  `json:"memory_usage"`
+	CPULoad     float64 `json:"cpu_load"` // Added for more data points
+	Goroutines  int     `json:"goroutines"`
+	Threads     int     `json:"threads"`
+}
+
+// WorkspaceStats contains metrics about the RDxClaw workspace.
+type WorkspaceStats struct {
+	TotalFiles int    `json:"total_files"`
+	Size       string `json:"size"`
 }
 
 // ActivityEvent represents a significant system event for Mission Control.

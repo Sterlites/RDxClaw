@@ -20,7 +20,7 @@ function initMatrix() {
 }
 
 function drawMatrix() {
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.15)'; // Increased darkness/persistence
   ctx.fillRect(0, 0, width, height);
 
   ctx.fillStyle = '#00ff41';
@@ -159,6 +159,12 @@ async function loadStatus() {
   if (data.system) {
     updateVal('memoryVal', data.system.memory_usage || '32MB');
     updateVal('goroutinesVal', data.system.goroutines || '12');
+    updateVal('loadVal', ((data.system.cpu_load || 0.4) * 100).toFixed(0) + '%');
+  }
+
+  if (data.workspace) {
+    updateVal('filesVal', data.workspace.total_files || '0');
+    updateVal('storageVal', data.workspace.size || '0 KB');
   }
 
 
