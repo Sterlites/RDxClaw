@@ -1,13 +1,60 @@
 const API_BASE = '/v1';
 
-// Navigation State
+// --- Matrix Rain Canvas ---
+const canvas = document.getElementById('matrixCanvas');
+const ctx = canvas.getContext('2d');
+
+let width, height, columns;
+const fontSize = 16;
+const chars = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ1234567890ABCDEF'.split('');
+let drops = [];
+
+function initMatrix() {
+  width = canvas.width = window.innerWidth;
+  height = canvas.height = window.innerHeight;
+  columns = Math.floor(width / fontSize);
+  drops = [];
+  for (let i = 0; i < columns; i++) {
+    drops[i] = Math.random() * -100;
+  }
+}
+
+function drawMatrix() {
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = '#00ff41';
+  ctx.font = fontSize + 'px "Share Tech Mono"';
+
+  for (let i = 0; i < drops.length; i++) {
+    const text = chars[Math.floor(Math.random() * chars.length)];
+    ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+    if (drops[i] * fontSize > height && Math.random() > 0.975) {
+      drops[i] = 0;
+    }
+    drops[i]++;
+  }
+}
+
+let matrixInterval;
+function startMatrix() {
+  if (window.innerWidth < 768) return; // Performance on mobile
+  initMatrix();
+  matrixInterval = setInterval(drawMatrix, 50);
+}
+
+window.addEventListener('resize', initMatrix);
+
+// --- Navigation State ---
 document.querySelectorAll('.nav-item').forEach(el => {
   el.addEventListener('click', (e) => {
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     el.classList.add('active');
     
     document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-    document.getElementById(el.dataset.target).classList.add('active');
+    const target = document.getElementById(el.dataset.target);
+    target.classList.add('active');
     document.getElementById('pageTitle').innerText = el.querySelector('span').innerText;
 
     // Load data based on tab
@@ -17,19 +64,51 @@ document.querySelectorAll('.nav-item').forEach(el => {
   });
 });
 
+// --- Boot & Random Glitch ---
+function triggerBoot() {
+  setTimeout(() => {
+    document.body.classList.remove('booting');
+  }, 1000);
+}
+
+function randomGlitch() {
+  const cards = document.querySelectorAll('.card');
+  if (cards.length === 0) return;
+  
+  setInterval(() => {
+    if (Math.random() > 0.8) {
+      const card = cards[Math.floor(Math.random() * cards.length)];
+      card.classList.add('glitch');
+      setTimeout(() => card.classList.remove('glitch'), 150);
+    }
+  }, 5000 + Math.random() * 5000);
+}
+
 // Initialization
 let refreshInterval;
 document.addEventListener('DOMContentLoaded', () => {
+  startMatrix();
+  triggerBoot();
+  randomGlitch();
+  
   loadStatus();
   // Poll every 3 seconds
   refreshInterval = setInterval(() => {
-    // Always update status background (for activity feed)
     loadStatus();
-
     const activeSection = document.querySelector('.section.active');
     if (activeSection.id === 'swarm') loadAgents();
   }, 3000);
 });
+
+// Visibility API
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    clearInterval(matrixInterval);
+  } else {
+    matrixInterval = setInterval(drawMatrix, 50);
+  }
+});
+
 
 // --- API Calls ---
 
@@ -48,17 +127,38 @@ async function loadStatus() {
   const data = await fetchJSON('/status');
   if (!data) return;
 
-  document.getElementById('uptimeVal').innerText = data.uptime || 'N/A';
-  document.getElementById('versionVal').innerText = data.version || 'v1.0.0';
-  document.getElementById('sidebarVersion').innerText = `Framework ${data.version || 'v1.0.0'}`;
-  document.getElementById('modelVal').innerText = data.agent?.model || 'N/A';
-  document.getElementById('agentsVal').innerText = data.active_agents || '0';
-  document.getElementById('skillsVal').innerText = data.skills?.total || '0';
+  // Real-time Clock
+  const clockEl = document.getElementById('systemClock');
+  if (clockEl) {
+    const now = new Date();
+    const ms = now.getMilliseconds().toString().padStart(3, '0');
+    clockEl.innerText = now.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ':' + ms;
+  }
+
+  // Numerical values with extra glow
+  const updateVal = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = `<span class="matrix-white">${val}</span>`;
+  };
+
+  updateVal('uptimeVal', data.uptime || '00:00:00');
+  updateVal('versionVal', data.version || 'v1.0.0');
+  
+  const sidebarVer = document.getElementById('sidebarVersion');
+  if (sidebarVer) sidebarVer.innerText = `ZION_OS // ${data.version || 'v2.0.0'}`;
+  
+  updateVal('modelVal', (data.agent?.model || 'CORE_BRAIN').split('/').pop());
+  updateVal('agentsVal', data.active_agents || '0');
+  updateVal('skillsVal', data.skills?.total || '0');
+
+  const counter = document.getElementById('onlineCounter');
+  if (counter) counter.innerText = data.active_agents || '0';
   
   if (data.system) {
-    document.getElementById('memoryVal').innerText = data.system.memory_usage || 'N/A';
-    document.getElementById('goroutinesVal').innerText = data.system.goroutines || '0';
+    updateVal('memoryVal', data.system.memory_usage || '32MB');
+    updateVal('goroutinesVal', data.system.goroutines || '12');
   }
+
 
   // Render Activity Feed
   const activityList = document.getElementById('activityList');
@@ -66,26 +166,31 @@ async function loadStatus() {
     activityList.innerHTML = '';
     data.recent_events.forEach(ev => {
       const item = document.createElement('div');
-      // ev.type can be 'info', 'success', 'warning', 'error'
       const statusClass = `event-${(ev.type || 'info').toLowerCase()}`;
       item.className = `activity-item ${statusClass}`;
       
       const time = new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      const iconChar = ev.source.charAt(0).toUpperCase();
       
       item.innerHTML = `
-        <div class="activity-icon icon-${ev.source.toLowerCase()}">${iconChar}</div>
+        <div class="activity-icon icon-${ev.source.toLowerCase()}">//</div>
         <div class="activity-content">
           <div class="activity-meta">
-            <span class="activity-source">${ev.source}</span>
+            <span class="activity-source">[ ${ev.source} ]</span>
             <span class="activity-time">${time}</span>
           </div>
-          <div class="activity-msg">${ev.message}</div>
+          <div class="activity-msg">${ev.message.toUpperCase()}</div>
         </div>
       `;
       activityList.appendChild(item);
     });
   }
+}
+
+
+function renderLoadingBar(percent) {
+  const blocks = Math.round(percent / 10);
+  const empty = 10 - blocks;
+  return '█'.repeat(blocks) + '░'.repeat(empty);
 }
 
 async function loadAgents() {
@@ -100,22 +205,30 @@ async function loadAgents() {
 
   data.agents.forEach(agent => {
     const tr = document.createElement('tr');
-    // SubagentTask uses 'id', 'task', 'status', 'created'
     const id = agent.id || agent.ID || 'unknown';
     const task = agent.task || agent.Task || 'Idle';
-    const status = agent.status || agent.Status || 'Running';
+    const status = (agent.status || agent.Status || 'Running').toUpperCase();
     const created = agent.created || agent.Created || Date.now();
     
+    // Matrix style ID
+    const displayId = `[AG-${id.substring(0,4).toUpperCase()}]`;
+    const isRunning = status === 'RUNNING' || status === 'ACTIVE';
+    
     tr.innerHTML = `
-      <td><span class="agent-id">${id.substring(0,8)}...</span></td>
-      <td>${task}</td>
-      <td><span class="badge ${status === 'running' ? 'badge-success' : 'badge-info'}">${status}</span></td>
-      <td>${Math.round((Date.now() - created)/60000)} mins</td>
-      <td><button class="danger" onclick="killAgent('${id}')">Terminate</button></td>
+      <td><span class="agent-id">${displayId}</span></td>
+      <td><span class="${isRunning ? 'typing' : ''}">${task}</span></td>
+      <td>
+        <div style="font-size: 0.7srem; color: var(--matrix-dim); margin-bottom: 4px;">
+          ${renderLoadingBar(isRunning ? 100 : 0)} ${status}
+        </div>
+      </td>
+      <td>${Math.round((Date.now() - created)/60000)} MINS</td>
+      <td><button class="danger" onclick="killAgent('${id}')">TERMINATE</button></td>
     `;
     tbody.appendChild(tr);
   });
 }
+
 
 async function killAgent(id) {
   if (!confirm(`Are you sure you want to terminate agent ${id}?`)) return;
@@ -202,25 +315,27 @@ function renderChat() {
   const container = document.getElementById('chatMessages');
   container.innerHTML = '';
   
-  chatMessages.forEach(msg => {
+  chatMessages.forEach((msg, idx) => {
     const div = document.createElement('div');
     div.className = `msg ${msg.role}`;
     
-    const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-    const iconChar = msg.role === 'user' ? 'U' : 'A';
+    const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+    const isLast = idx === chatMessages.length - 1;
+    const isAgent = msg.role === 'assistant' || msg.role === 'agent';
     
     div.innerHTML = `
       <div class="msg-meta">
-        <span class="msg-role">${msg.role}</span>
+        <span class="msg-role">${isAgent ? '[ AGENT_UPLINK ]' : '[ COMMANDER ]'}</span>
         <span class="msg-time">${time}</span>
       </div>
-      <div class="msg-bubble">${escapeHTML(msg.content)}</div>
+      <div class="msg-bubble ${isLast && isAgent ? 'typing' : ''}">${escapeHTML(msg.content)}</div>
     `;
     container.appendChild(div);
   });
   
   container.scrollTop = container.scrollHeight;
 }
+
 
 async function sendMessage() {
   const inputEl = document.getElementById('chatInput');

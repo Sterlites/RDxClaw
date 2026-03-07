@@ -1,49 +1,40 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="matrix-theme">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>RDxClaw Mission Control</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
+<body class="booting">
+  <!-- Matrix Rain Canvas -->
+  <canvas id="matrixCanvas"></canvas>
+  <div class="scanlines"></div>
 
   <!-- Sidebar Navigation -->
   <aside>
     <div class="sidebar-header">
       <div class="logo-icon">RDx</div>
       <div class="sidebar-brand">
-        <h2>Mission Control</h2>
-        <span id="sidebarVersion">Framework v1.0.0</span>
+        <h2>RDxClawOS</h2>
+        <span id="sidebarVersion">AGENT_CTRL_v2.0</span>
       </div>
     </div>
     <ul class="nav-links">
       <li class="nav-item active" data-target="dashboard">
-        <svg xmlns="http://www.w3.org/.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-        </svg>
-        <span>Dashboard</span>
+        <span>// DASHBOARD</span>
       </li>
       <li class="nav-item" data-target="swarm">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-        </svg>
-        <span>Swarm Management</span>
+        <span>// SWARM_MGMT</span>
       </li>
       <li class="nav-item" data-target="skills">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-        </svg>
-        <span>Skills Library</span>
+        <span>// SKILLS_LIB</span>
       </li>
       <li class="nav-item" data-target="chat">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-        </svg>
-        <span>Terminal Chat</span>
+        <span>// TERMINAL</span>
       </li>
     </ul>
   </aside>
@@ -51,9 +42,10 @@
   <!-- Main Workspace -->
   <main>
     <header class="topbar">
-      <h1 class="page-title" id="pageTitle">Dashboard</h1>
+      <h1 class="page-title" id="pageTitle">DASHBOARD</h1>
+      <div id="systemClock" style="margin: 0 auto; font-family: 'Share Tech Mono'; color: var(--matrix-lime); text-shadow: 0 0 10px var(--matrix-green);">00:00:00:000</div>
       <div class="status-badge">
-        <span class="status-dot"></span> System Online
+        <span class="status-dot"></span> AGENTS_ONLINE: <span id="onlineCounter">0</span>
       </div>
     </header>
 
