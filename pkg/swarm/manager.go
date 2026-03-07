@@ -204,6 +204,18 @@ func (sm *Manager) ListAgents() []*SubagentTask {
 	return tasks
 }
 
+func (sm *Manager) CountRunning() int {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	count := 0
+	for _, t := range sm.tasks {
+		if t.Status == "running" {
+			count++
+		}
+	}
+	return count
+}
+
 func (sm *Manager) KillAgent(id string) error {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()

@@ -217,6 +217,10 @@ func (al *AgentLoop) Stop() {
 	al.running.Store(false)
 }
 
+func (al *AgentLoop) IsRunning() bool {
+	return al.running.Load()
+}
+
 func (al *AgentLoop) RegisterTool(tool tools.Tool) {
 	al.tools.Register(tool)
 }

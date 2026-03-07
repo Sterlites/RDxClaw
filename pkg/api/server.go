@@ -333,9 +333,14 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		recentEvents[i], recentEvents[j] = recentEvents[j], recentEvents[i]
 	}
 
-	swarmCount := 0
+	activeCount := 0
 	if manager := s.agentLoop.GetSwarmManager(); manager != nil {
-		swarmCount = len(manager.ListAgents())
+		activeCount = manager.CountRunning()
+	}
+
+	// Add 1 for the Primary Agent if the loop is running
+	if s.agentLoop.IsRunning() {
+		activeCount++
 	}
 
 	modelName := "Default"
@@ -362,7 +367,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 			Available: skillsInfo["available"].(int),
 			Names:     skillNames,
 		},
-		ActiveAgents: swarmCount,
+		ActiveAgents: activeCount,
 		RecentEvents: recentEvents,
 		System: SystemStats{
 			MemoryUsage: memUsage,
