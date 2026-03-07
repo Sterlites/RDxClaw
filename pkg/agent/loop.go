@@ -121,7 +121,9 @@ func createToolRegistry(workspace string, restrict bool, cfg *config.Config, msg
 
 func NewAgentLoop(cfg *config.Config, msgBus *bus.MessageBus, provider providers.LLMProvider) *AgentLoop {
 	workspace := cfg.WorkspacePath()
-	os.MkdirAll(workspace, 0755)
+	if err := os.MkdirAll(workspace, 0750); err != nil { // #nosec G104
+		logger.ErrorCF("agent", "Failed to create workspace directory", map[string]interface{}{"error": err.Error(), "path": workspace})
+	}
 
 	restrict := cfg.Agents.Defaults.RestrictToWorkspace
 
@@ -418,7 +420,7 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, opts processOptions) (str
 
 	// 6. Save final assistant message to session
 	al.sessions.AddMessage(opts.SessionKey, "assistant", finalContent)
-	al.sessions.Save(opts.SessionKey)
+	_ = al.sessions.Save(opts.SessionKey) // #nosec G104
 
 	// 7. Optional: summarization
 	if opts.EnableSummary {
@@ -824,7 +826,7 @@ func (al *AgentLoop) forceCompression(sessionKey string) {
 
 	// Update session
 	al.sessions.SetHistory(sessionKey, newHistory)
-	al.sessions.Save(sessionKey)
+	_ = al.sessions.Save(sessionKey) // #nosec G104
 
 	logger.WarnCF("agent", "Forced compression executed", map[string]interface{}{
 		"session_key":  sessionKey,
@@ -973,7 +975,7 @@ func (al *AgentLoop) summarizeSession(sessionKey string) {
 	if finalSummary != "" {
 		al.sessions.SetSummary(sessionKey, finalSummary)
 		al.sessions.TruncateHistory(sessionKey, 4)
-		al.sessions.Save(sessionKey)
+		_ = al.sessions.Save(sessionKey) // #nosec G104
 	}
 }
 

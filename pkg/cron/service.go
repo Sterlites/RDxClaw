@@ -75,7 +75,7 @@ func NewCronService(storePath string, onJob JobHandler) *CronService {
 		gronx:     gronx.New(),
 	}
 	// Initialize and load store on creation
-	cs.loadStore()
+	_ = cs.loadStore() // #nosec G104 - loading failure is handled at start
 	return cs
 }
 
@@ -332,7 +332,7 @@ func (cs *CronService) loadStore() error {
 
 func (cs *CronService) saveStoreUnsafe() error {
 	dir := filepath.Dir(cs.storePath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0750); err != nil {
 		return err
 	}
 

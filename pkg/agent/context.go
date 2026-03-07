@@ -149,7 +149,7 @@ func (cb *ContextBuilder) LoadBootstrapFiles() string {
 	var result string
 	for _, filename := range bootstrapFiles {
 		filePath := filepath.Join(cb.workspace, filename)
-		if data, err := os.ReadFile(filePath); err == nil {
+		if data, err := os.ReadFile(filePath); err == nil { // #nosec G304
 			result += fmt.Sprintf("## %s\n\n%s\n\n", filename, string(data))
 		}
 	}

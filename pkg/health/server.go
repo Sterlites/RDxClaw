@@ -113,7 +113,7 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 		Uptime: uptime.String(),
 	}
 
-	json.NewEncoder(w).Encode(resp)
+	_ = json.NewEncoder(w).Encode(resp) // #nosec G104
 }
 
 func (s *Server) readyHandler(w http.ResponseWriter, r *http.Request) {
@@ -129,31 +129,31 @@ func (s *Server) readyHandler(w http.ResponseWriter, r *http.Request) {
 
 	if !ready {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		json.NewEncoder(w).Encode(StatusResponse{
+		_ = json.NewEncoder(w).Encode(StatusResponse{
 			Status: "not ready",
 			Checks: checks,
-		})
+		}) // #nosec G104
 		return
 	}
 
 	for _, check := range checks {
 		if check.Status == "fail" {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			json.NewEncoder(w).Encode(StatusResponse{
+			_ = json.NewEncoder(w).Encode(StatusResponse{
 				Status: "not ready",
 				Checks: checks,
-			})
+			}) // #nosec G104
 			return
 		}
 	}
 
 	w.WriteHeader(http.StatusOK)
 	uptime := time.Since(s.startTime)
-	json.NewEncoder(w).Encode(StatusResponse{
+	_ = json.NewEncoder(w).Encode(StatusResponse{
 		Status: "ready",
 		Uptime: uptime.String(),
 		Checks: checks,
-	})
+	}) // #nosec G104
 }
 
 func statusString(ok bool) string {

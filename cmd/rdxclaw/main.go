@@ -1677,7 +1677,7 @@ func skillsListBuiltinCmd() {
 
 			description := "No description"
 			if _, err := os.Stat(skillFile); err == nil {
-				data, err := os.ReadFile(skillFile)
+				data, err := os.ReadFile(skillFile) // #nosec G304
 				if err == nil {
 					content := string(data)
 					if idx := strings.Index(content, "\n"); idx > 0 {

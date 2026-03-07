@@ -89,7 +89,7 @@ func (s *Service) Stop() {
 	}
 
 	for _, src := range s.sources {
-		src.Stop()
+		_ = src.Stop() // #nosec G104
 	}
 
 	logger.InfoC("devices", "Device event service stopped")

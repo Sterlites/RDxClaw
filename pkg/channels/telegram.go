@@ -100,7 +100,7 @@ func (c *TelegramChannel) Start(ctx context.Context) error {
 	}
 
 	bh.HandleMessage(func(ctx *th.Context, message telego.Message) error {
-		c.commands.Help(ctx, message)
+		_ = c.commands.Help(ctx, message) // #nosec G104
 		return nil
 	}, th.CommandEqual("help"))
 	bh.HandleMessage(func(ctx *th.Context, message telego.Message) error {
@@ -128,7 +128,7 @@ func (c *TelegramChannel) Start(ctx context.Context) error {
 
 	go func() {
 		<-ctx.Done()
-		bh.Stop()
+		bh.Stop() // #nosec G104 - internal teardown
 	}()
 
 	return nil

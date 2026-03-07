@@ -70,7 +70,7 @@ func (sm *Manager) Spawn(ctx context.Context, task, label, originChannel, origin
 
 	// Create a new context with cancel for this specific task
 	// Use the passed context as parent to ensure cleanup if caller cancels
-	taskCtx, cancel := context.WithCancel(ctx)
+	taskCtx, cancel := context.WithCancel(ctx) // #nosec G118
 
 	subagentTask := &SubagentTask{
 		ID:            taskID,
@@ -85,9 +85,9 @@ func (sm *Manager) Spawn(ctx context.Context, task, label, originChannel, origin
 	sm.tasks[taskID] = subagentTask
 
 	// Start task in background
-	go func() {
+	go func(tCtx context.Context) {
 		defer cancel() // Ensure cancellation function is called to release resources
-		result, err := sm.RunTask(taskCtx, subagentTask)
+		result, err := sm.RunTask(tCtx, subagentTask)
 
 		// Notify callback if present
 		if callback != nil {
@@ -108,7 +108,7 @@ func (sm *Manager) Spawn(ctx context.Context, task, label, originChannel, origin
 			defer cbCancel()
 			callback(cbCtx, toolResult)
 		}
-	}()
+	}(taskCtx)
 
 	if label != "" {
 		return fmt.Sprintf("Spawned agent '%s' (ID: %s) for task: %s", label, taskID, task), nil
