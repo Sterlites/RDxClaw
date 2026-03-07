@@ -5,7 +5,7 @@ const canvas = document.getElementById('matrixCanvas');
 const ctx = canvas.getContext('2d');
 
 let width, height, columns;
-const fontSize = 16;
+const fontSize = 32; // Double size
 const chars = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ1234567890ABCDEF'.split('');
 let drops = [];
 
@@ -20,7 +20,7 @@ function initMatrix() {
 }
 
 function drawMatrix() {
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.15)'; // Increased darkness/persistence
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.1)'; // More persistent trail
   ctx.fillRect(0, 0, width, height);
 
   ctx.fillStyle = '#00ff41';

@@ -57,7 +57,7 @@
   width: 100%;
   height: 100%;
   z-index: 0;
-  opacity: 0.15; /* Increased visibility */
+  opacity: 0.25; /* Even higher for a "good" effect as requested */
   pointer-events: none;
 }
 
@@ -127,6 +127,7 @@ body {
   color: var(--matrix-green);
   box-shadow: 0 0 15px var(--matrix-glow);
   border-radius: 0; /* Boxy look */
+  text-transform: none !important;
 }
 
 .matrix-theme .sidebar-brand h2 {
@@ -134,6 +135,7 @@ body {
   letter-spacing: 0.2em;
   color: var(--matrix-green);
   text-shadow: 0 0 8px var(--matrix-green);
+  text-transform: none !important;
 }
 
 .matrix-theme .nav-item {
@@ -858,9 +860,39 @@ tr:hover td {
 .matrix-theme .event-info { border-left: 4px solid var(--matrix-dim); }
 .matrix-theme .event-success { border-left: 4px solid var(--matrix-green); }
 .matrix-theme .event-warning { border-left: 4px solid var(--matrix-lime); }
-.matrix-theme .event-error { 
+.matrix-theme .event-error {
   border-left: 4px solid var(--matrix-red);
   background: rgba(255, 0, 60, 0.05);
+}
+
+.matrix-theme .sidebar-header {
+  padding: 25px 20px;
+  border-bottom: 2px solid var(--matrix-glow);
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.logo-icon {
+  width: 50px;
+  height: 50px;
+  border: 2px solid var(--matrix-lime);
+  color: var(--matrix-lime);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 1.4rem;
+  box-shadow: 0 0 15px var(--matrix-glow);
+  text-transform: none !important; /* RDx preserves case */
+}
+
+.sidebar-brand h2 {
+  font-size: 1.5rem;
+  color: var(--matrix-lime);
+  margin: 0;
+  text-transform: none !important; /* RDxClaw preserves case */
 }
 
 .matrix-theme .activity-icon {
