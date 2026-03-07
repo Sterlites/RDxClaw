@@ -9,6 +9,8 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -117,6 +119,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("GET /v1/skills", s.handleListSkills)
 	mux.HandleFunc("GET /v1/agents", s.handleListAgents)
 	mux.HandleFunc("DELETE /v1/agents/{id}", s.handleKillAgent)
+	mux.HandleFunc("GET /v1/files", s.handleListFiles)
+	mux.HandleFunc("GET /v1/files/content", s.handleGetFileContent)
 	mux.HandleFunc("GET /health", s.handleHealth)
 	mux.HandleFunc("GET /ready", s.handleHealth)
 
@@ -426,6 +430,79 @@ func (s *Server) handleKillAgent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"message": fmt.Sprintf("Agent %s killed", id),
+	})
+}
+
+func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request) {
+	// Root directories to scan for relevant files
+	docsDirs := []string{"workspace", "workspace/memory"}
+	var items []FileListItem
+
+	for _, dir := range docsDirs {
+		// Verify directory exists
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			continue
+		}
+
+		err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return nil // Skip errors
+			}
+			if !info.IsDir() && filepath.Ext(path) == ".md" {
+				// We only care about .md files for this feature as requested
+				items = append(items, FileListItem{
+					Name:    info.Name(),
+					Path:    path,
+					Size:    info.Size(),
+					ModTime: info.ModTime(),
+				})
+			}
+			return nil
+		})
+		if err != nil {
+			slog.Warn("Error walking directory", "dir", dir, "err", err)
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"files": items,
+		"count": len(items),
+	})
+}
+
+func (s *Server) handleGetFileContent(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Query().Get("path")
+	if path == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "path is required")
+		return
+	}
+
+	// Security: Ensure path is within the allowed directories
+	cleanPath := filepath.Clean(path)
+	allowed := false
+	docsDirs := []string{"workspace", "workspace/memory"}
+	for _, dir := range docsDirs {
+		if strings.HasPrefix(cleanPath, filepath.Clean(dir)) {
+			allowed = true
+			break
+		}
+	}
+
+	if !allowed {
+		writeError(w, http.StatusForbidden, "access_denied", "path is outside allowed documentation directories")
+		return
+	}
+
+	content, err := os.ReadFile(cleanPath)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "file_not_found", fmt.Sprintf("failed to read file: %v", err))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, FileContentResponse{
+		Name:    filepath.Base(cleanPath),
+		Path:    cleanPath,
+		Content: string(content),
 	})
 }
 

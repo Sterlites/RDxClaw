@@ -61,6 +61,7 @@ document.querySelectorAll('.nav-item').forEach(el => {
     if (el.dataset.target === 'dashboard') loadStatus();
     if (el.dataset.target === 'swarm') loadAgents();
     if (el.dataset.target === 'skills') loadSkills();
+    if (el.dataset.target === 'docs') loadFiles();
   });
 });
 
@@ -97,6 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadStatus();
     const activeSection = document.querySelector('.section.active');
     if (activeSection.id === 'swarm') loadAgents();
+    if (activeSection.id === 'docs') loadFiles();
   }, 3000);
 });
 
@@ -300,6 +302,53 @@ async function executeSkill(skillName) {
     if (loader) loader.classList.remove('active');
     loadStatus(); // Instant refresh of activity feed
   }
+}
+
+async function loadFiles() {
+  const data = await fetchJSON('/files');
+  const fileList = document.getElementById('fileList');
+  if (!data || !data.files) {
+    fileList.innerHTML = '<li class="file-item">Failed to load files</li>';
+    return;
+  }
+
+  // Preserve active selection if possible
+  const activePath = document.querySelector('.file-item.active')?.dataset.path;
+  
+  fileList.innerHTML = '';
+  data.files.forEach(file => {
+    const li = document.createElement('li');
+    li.className = 'file-item';
+    if (file.path === activePath) li.classList.add('active');
+    li.dataset.path = file.path;
+    li.innerHTML = `<span>${file.name}</span>`;
+    li.onclick = () => loadFileContent(file.path, li);
+    fileList.appendChild(li);
+  });
+
+  if (data.files.length === 0) {
+    fileList.innerHTML = '<li class="file-item">No markdown files found.</li>';
+  }
+}
+
+async function loadFileContent(path, el) {
+  // UI feedback
+  document.querySelectorAll('.file-item').forEach(item => item.classList.remove('active'));
+  el.classList.add('active');
+
+  document.getElementById('fileContent').innerText = '// PULLING_DATA_FROM_GRID...';
+  
+  const data = await fetchJSON(`/files/content?path=${encodeURIComponent(path)}`);
+  if (!data || !data.content) {
+    document.getElementById('fileContent').innerText = 'Failed to load file content.';
+    return;
+  }
+
+  document.getElementById('currentFileName').innerText = data.name.toUpperCase();
+  document.getElementById('fileContent').innerText = data.content;
+  
+  const viewer = document.querySelector('.viewer-content');
+  viewer.scrollTop = 0;
 }
 
 // --- Chat functionality ---

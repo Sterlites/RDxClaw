@@ -125,12 +125,28 @@ type SkillListItem struct {
 	Capabilities string `json:"capabilities,omitempty"`
 }
 
-// --- Error Types ---
+// --- File Explorer Types ---
+
+// FileListItem represents a file in the workspace.
+type FileListItem struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
+	Size int64  `json:"size"`
+	ModTime time.Time `json:"mod_time"`
+}
+
+// FileContentResponse contains the content of a requested file.
+type FileContentResponse struct {
+	Name    string `json:"name"`
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
 
 // ErrorResponse is the standard API error format.
 type ErrorResponse struct {
 	Error ErrorDetail `json:"error"`
 }
+
 
 // ErrorDetail contains error information.
 type ErrorDetail struct {
