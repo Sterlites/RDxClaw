@@ -69,7 +69,8 @@ func (sm *Manager) Spawn(ctx context.Context, task, label, originChannel, origin
 	sm.nextID++
 
 	// Create a new context with cancel for this specific task
-	taskCtx, cancel := context.WithCancel(context.Background())
+	// Use the passed context as parent to ensure cleanup if caller cancels
+	taskCtx, cancel := context.WithCancel(ctx)
 
 	subagentTask := &SubagentTask{
 		ID:            taskID,
@@ -85,6 +86,7 @@ func (sm *Manager) Spawn(ctx context.Context, task, label, originChannel, origin
 
 	// Start task in background
 	go func() {
+		defer cancel() // Ensure cancellation function is called to release resources
 		result, err := sm.RunTask(taskCtx, subagentTask)
 
 		// Notify callback if present
@@ -99,7 +101,10 @@ func (sm *Manager) Spawn(ctx context.Context, task, label, originChannel, origin
 			} else {
 				toolResult.ForLLM = fmt.Sprintf("Agent completed: %s", result.Content)
 			}
-			callback(context.Background(), toolResult)
+			// Use a shorter-lived context for the callback execution
+			cbCtx, cbCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cbCancel()
+			callback(cbCtx, toolResult)
 		}
 	}()
 

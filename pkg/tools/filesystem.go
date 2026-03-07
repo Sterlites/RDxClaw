@@ -177,11 +177,11 @@ func (t *WriteFileTool) Execute(ctx context.Context, args map[string]interface{}
 	}
 
 	dir := filepath.Dir(resolvedPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		return ErrorResult(fmt.Sprintf("failed to create directory: %v", err))
 	}
 
-	if err := os.WriteFile(resolvedPath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(resolvedPath, []byte(content), 0600); err != nil {
 		return ErrorResult(fmt.Sprintf("failed to write file: %v", err))
 	}
 

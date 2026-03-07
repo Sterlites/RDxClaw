@@ -38,7 +38,9 @@ func NewManager(workspace string) *Manager {
 	oldStateFile := filepath.Join(workspace, "state.json")
 
 	// Create state directory if it doesn't exist
-	os.MkdirAll(stateDir, 0755)
+	if err := os.MkdirAll(stateDir, 0700); err != nil {
+		log.Printf("[ERROR] state: failed to create state directory: %v", err)
+	}
 
 	sm := &Manager{
 		workspace: workspace,
@@ -52,13 +54,18 @@ func NewManager(workspace string) *Manager {
 		if data, err := os.ReadFile(oldStateFile); err == nil {
 			if err := json.Unmarshal(data, sm.state); err == nil {
 				// Migrate to new location
-				sm.saveAtomic()
-				log.Printf("[INFO] state: migrated state from %s to %s", oldStateFile, stateFile)
+				if err := sm.saveAtomic(); err != nil {
+					log.Printf("[ERROR] state: failed to migrate state: %v", err)
+				} else {
+					log.Printf("[INFO] state: migrated state from %s to %s", oldStateFile, stateFile)
+				}
 			}
 		}
 	} else {
 		// Load from new location
-		sm.load()
+		if err := sm.load(); err != nil {
+			log.Printf("[ERROR] state: failed to load state: %v", err)
+		}
 	}
 
 	return sm
@@ -139,14 +146,16 @@ func (sm *Manager) saveAtomic() error {
 	}
 
 	// Write to temp file
-	if err := os.WriteFile(tempFile, data, 0644); err != nil {
+	if err := os.WriteFile(tempFile, data, 0600); err != nil {
 		return fmt.Errorf("failed to write temp file: %w", err)
 	}
 
 	// Atomic rename from temp to target
 	if err := os.Rename(tempFile, sm.stateFile); err != nil {
 		// Cleanup temp file if rename fails
-		os.Remove(tempFile)
+		if removeErr := os.Remove(tempFile); removeErr != nil {
+			log.Printf("[ERROR] state: failed to remove temp file %s: %v", tempFile, removeErr)
+		}
 		return fmt.Errorf("failed to rename temp file: %w", err)
 	}
 

@@ -119,8 +119,12 @@ func DownloadFile(url, filename string, opts DownloadOptions) string {
 	defer out.Close()
 
 	if _, err := io.Copy(out, resp.Body); err != nil {
-		out.Close()
-		os.Remove(localPath)
+		if err := out.Close(); err != nil {
+			logger.ErrorCF(opts.LoggerPrefix, "Failed to close file after copy error", map[string]interface{}{"error": err.Error()})
+		}
+		if err := os.Remove(localPath); err != nil {
+			logger.ErrorCF(opts.LoggerPrefix, "Failed to remove partial file", map[string]interface{}{"error": err.Error()})
+		}
 		logger.ErrorCF(opts.LoggerPrefix, "Failed to write file", map[string]interface{}{
 			"error": err.Error(),
 		})

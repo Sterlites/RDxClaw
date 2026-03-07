@@ -93,7 +93,7 @@ func (si *SkillInstaller) InstallFromArchive(archivePath string) (*InstallResult
 		return nil, fmt.Errorf("skill '%s' already exists", baseName)
 	}
 
-	if err := os.MkdirAll(skillDir, 0755); err != nil {
+	if err := os.MkdirAll(skillDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create skill directory: %w", err)
 	}
 
@@ -106,12 +106,12 @@ func (si *SkillInstaller) InstallFromArchive(archivePath string) (*InstallResult
 	case ext == ".gz" || ext == ".tgz":
 		filesWritten, extractErr = extractTarGz(archivePath, skillDir)
 	default:
-		os.RemoveAll(skillDir)
+		_ = os.RemoveAll(skillDir)
 		return nil, fmt.Errorf("unsupported archive format: %s (supported: .zip, .tar.gz, .tgz)", ext)
 	}
 
 	if extractErr != nil {
-		os.RemoveAll(skillDir)
+		_ = os.RemoveAll(skillDir)
 		return nil, fmt.Errorf("failed to extract archive: %w", extractErr)
 	}
 
@@ -271,16 +271,18 @@ func (si *SkillInstaller) downloadRepoZip(ctx context.Context, repo, skillDir st
 	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
 		return nil, fmt.Errorf("failed to download zip: %w", err)
 	}
-	tmpFile.Close()
+	if err := tmpFile.Close(); err != nil {
+		slog.Error("failed to close temp file", "error", err)
+	}
 
 	// Extract zip — GitHub zips have a top-level directory like "repo-main/"
-	if err := os.MkdirAll(skillDir, 0755); err != nil {
+	if err := os.MkdirAll(skillDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create skill directory: %w", err)
 	}
 
 	filesWritten, err := extractZipStripRoot(tmpFile.Name(), skillDir)
 	if err != nil {
-		os.RemoveAll(skillDir)
+		_ = os.RemoveAll(skillDir)
 		return nil, fmt.Errorf("failed to extract zip: %w", err)
 	}
 
@@ -322,12 +324,12 @@ func (si *SkillInstaller) downloadSkillMD(ctx context.Context, repo, skillDir st
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	if err := os.MkdirAll(skillDir, 0755); err != nil {
+	if err := os.MkdirAll(skillDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create skill directory: %w", err)
 	}
 
 	skillPath := filepath.Join(skillDir, "SKILL.md")
-	if err := os.WriteFile(skillPath, body, 0644); err != nil {
+	if err := os.WriteFile(skillPath, body, 0600); err != nil {
 		return nil, fmt.Errorf("failed to write skill file: %w", err)
 	}
 
@@ -384,11 +386,13 @@ func extractZipStripRoot(zipPath, destDir string) (int, error) {
 		}
 
 		if f.FileInfo().IsDir() {
-			os.MkdirAll(targetPath, 0755)
+			if err := os.MkdirAll(targetPath, 0700); err != nil {
+				return filesWritten, err
+			}
 			continue
 		}
 
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0700); err != nil {
 			return filesWritten, err
 		}
 
@@ -399,15 +403,16 @@ func extractZipStripRoot(zipPath, destDir string) (int, error) {
 
 		rc, err := f.Open()
 		if err != nil {
-			outFile.Close()
+			_ = outFile.Close()
 			return filesWritten, err
 		}
 
-		_, err = io.Copy(outFile, rc)
-		rc.Close()
-		outFile.Close()
-		if err != nil {
-			return filesWritten, err
+		// Security: limit decompressed size to 50MB per file to prevent DoS
+		_, err = io.CopyN(outFile, rc, 50*1024*1024)
+		_ = rc.Close()
+		_ = outFile.Close()
+		if err != nil && err != io.EOF {
+			return filesWritten, fmt.Errorf("failed to copy file (check for zip bomb or size limit): %w", err)
 		}
 		filesWritten++
 	}
@@ -450,19 +455,22 @@ func extractTarGz(archivePath, destDir string) (int, error) {
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			os.MkdirAll(targetPath, 0755)
+			if err := os.MkdirAll(targetPath, 0700); err != nil {
+				return filesWritten, err
+			}
 		case tar.TypeReg:
-			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0700); err != nil {
 				return filesWritten, err
 			}
 			outFile, err := os.Create(targetPath)
 			if err != nil {
 				return filesWritten, err
 			}
-			_, err = io.Copy(outFile, tarReader)
-			outFile.Close()
-			if err != nil {
-				return filesWritten, err
+			// Security: limit decompressed size to 50MB per file to prevent DoS
+			_, err = io.CopyN(outFile, tarReader, 50*1024*1024)
+			_ = outFile.Close()
+			if err != nil && err != io.EOF {
+				return filesWritten, fmt.Errorf("failed to copy file (check for decompression bomb or size limit): %w", err)
 			}
 			filesWritten++
 		}

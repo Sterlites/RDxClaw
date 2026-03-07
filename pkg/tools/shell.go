@@ -96,9 +96,11 @@ func (t *ExecTool) Execute(ctx context.Context, args map[string]interface{}) *To
 
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		cmd = exec.CommandContext(cmdCtx, "powershell", "-NoProfile", "-NonInteractive", "-Command", command)
+		// Gosec ignored: this is a shell tool intended to execute commands, with safety guards applied above.
+		cmd = exec.CommandContext(cmdCtx, "powershell", "-NoProfile", "-NonInteractive", "-Command", command) // #nosec G204
 	} else {
-		cmd = exec.CommandContext(cmdCtx, "sh", "-c", command)
+		// Gosec ignored: this is a shell tool intended to execute commands, with safety guards applied above.
+		cmd = exec.CommandContext(cmdCtx, "sh", "-c", command) // #nosec G204
 	}
 	if cwd != "" {
 		cmd.Dir = cwd

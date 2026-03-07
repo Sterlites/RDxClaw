@@ -29,7 +29,9 @@ func NewMemoryStore(workspace string) *MemoryStore {
 	memoryFile := filepath.Join(memoryDir, "MEMORY.md")
 
 	// Ensure memory directory exists
-	os.MkdirAll(memoryDir, 0755)
+	if err := os.MkdirAll(memoryDir, 0700); err != nil {
+		fmt.Printf("Warning: failed to create memory directory %s: %v\n", memoryDir, err)
+	}
 
 	return &MemoryStore{
 		workspace:  workspace,
@@ -57,7 +59,7 @@ func (ms *MemoryStore) ReadLongTerm() string {
 
 // WriteLongTerm writes content to the long-term memory file (MEMORY.md).
 func (ms *MemoryStore) WriteLongTerm(content string) error {
-	return os.WriteFile(ms.memoryFile, []byte(content), 0644)
+	return os.WriteFile(ms.memoryFile, []byte(content), 0600)
 }
 
 // ReadToday reads today's daily note.
@@ -77,7 +79,9 @@ func (ms *MemoryStore) AppendToday(content string) error {
 
 	// Ensure month directory exists
 	monthDir := filepath.Dir(todayFile)
-	os.MkdirAll(monthDir, 0755)
+	if err := os.MkdirAll(monthDir, 0700); err != nil {
+		return fmt.Errorf("failed to create month directory: %w", err)
+	}
 
 	var existingContent string
 	if data, err := os.ReadFile(todayFile); err == nil {
@@ -94,7 +98,7 @@ func (ms *MemoryStore) AppendToday(content string) error {
 		newContent = existingContent + "\n" + content
 	}
 
-	return os.WriteFile(todayFile, []byte(newContent), 0644)
+	return os.WriteFile(todayFile, []byte(newContent), 0600)
 }
 
 // GetRecentDailyNotes returns daily notes from the last N days.

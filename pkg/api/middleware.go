@@ -170,7 +170,7 @@ func RateLimitMiddleware(limiter *RateLimiter, next http.Handler) http.Handler {
 		}
 
 		if !limiter.Allow(ip) {
-			slog.Warn("rate_limit_tripped", "ip", ip, "path", r.URL.Path)
+			slog.Warn("rate_limit_tripped", "ip", sanitizeLog(ip), "path", sanitizeLog(r.URL.Path))
 			writeError(w, http.StatusTooManyRequests, "rate_limit_exceeded", "Rate limit exceeded. Please retry later.")
 			return
 		}
@@ -189,13 +189,19 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(sw, r)
 
 		slog.Info("api_request",
-			"method", r.Method,
-			"path", r.URL.Path,
+			"method", sanitizeLog(r.Method),
+			"path", sanitizeLog(r.URL.Path),
 			"status", sw.status,
 			"duration_ms", time.Since(start).Milliseconds(),
-			"remote", r.RemoteAddr,
+			"remote", sanitizeLog(r.RemoteAddr),
 		)
 	})
+}
+
+func sanitizeLog(s string) string {
+	s = strings.ReplaceAll(s, "\n", "")
+	s = strings.ReplaceAll(s, "\r", "")
+	return s
 }
 
 type statusWriter struct {

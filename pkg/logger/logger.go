@@ -71,13 +71,15 @@ func EnableFileLogging(filePath string) error {
 	mu.Lock()
 	defer mu.Unlock()
 
-	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
 
 	if logger.file != nil {
-		logger.file.Close()
+		if err := logger.file.Close(); err != nil {
+			log.Printf("Warning: failed to close old log file: %v", err)
+		}
 	}
 
 	logger.file = file
@@ -90,7 +92,9 @@ func DisableFileLogging() {
 	defer mu.Unlock()
 
 	if logger.file != nil {
-		logger.file.Close()
+		if err := logger.file.Close(); err != nil {
+			log.Printf("Warning: failed to close log file: %v", err)
+		}
 		logger.file = nil
 		log.Println("File logging disabled")
 	}
@@ -119,7 +123,9 @@ func logMessage(level LogLevel, component string, message string, fields map[str
 	if logger.file != nil {
 		jsonData, err := json.Marshal(entry)
 		if err == nil {
-			logger.file.WriteString(string(jsonData) + "\n")
+			if _, err := logger.file.WriteString(string(jsonData) + "\n"); err != nil {
+				log.Printf("Warning: failed to write to log file: %v", err)
+			}
 		}
 	}
 

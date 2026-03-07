@@ -104,7 +104,9 @@ func (s *Server) Start() error {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write(index)
+		if _, err := w.Write(index); err != nil {
+			slog.Error("failed to write response", "error", err)
+		}
 	})
 
 	// Serve other static files (css, js, etc.)
@@ -141,7 +143,17 @@ func (s *Server) Start() error {
 
 	addr := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
 	slog.Info("API server starting", "addr", addr)
-	return http.ListenAndServe(addr, handler)
+
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Minute, // Large for long chat streams
+		WriteTimeout:      10 * time.Minute,
+		IdleTimeout:       120 * time.Second,
+	}
+
+	return srv.ListenAndServe()
 }
 
 // --- Handlers ---
@@ -384,7 +396,7 @@ func (s *Server) getWorkspaceStats() WorkspaceStats {
 	var totalSize int64
 	var count int
 	
-	filepath.Walk(s.workspace, func(_ string, info os.FileInfo, err error) error {
+	_ = filepath.Walk(s.workspace, func(_ string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
 		}
@@ -587,7 +599,7 @@ func (s *Server) handleUpdateFileContent(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Write content to file
-	err = os.WriteFile(cleanPath, []byte(req.Content), 0644)
+	err = os.WriteFile(cleanPath, []byte(req.Content), 0600)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "write_error", fmt.Sprintf("Failed to save file: %v", err))
 		return
@@ -617,7 +629,9 @@ func decodeJSON(r *http.Request, v interface{}) error {
 func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		slog.Error("failed to encode json response", "error", err)
+	}
 }
 
 func writeError(w http.ResponseWriter, status int, code, message string) {

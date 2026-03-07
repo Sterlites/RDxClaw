@@ -92,7 +92,9 @@ func LoginBrowser(cfg OAuthProviderConfig) (*AuthCredential, error) {
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		server.Shutdown(ctx)
+		if err := server.Shutdown(ctx); err != nil {
+			fmt.Printf("Warning: failed to shutdown auth server cleanly: %v\n", err)
+		}
 	}()
 
 	fmt.Printf("Open this URL to authenticate:\n\n%s\n\n", authURL)
@@ -447,14 +449,20 @@ func base64URLDecode(s string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(s)
 }
 
-func openBrowser(url string) error {
+func openBrowser(urlStr string) error {
+	// Security: Validate URL to prevent command injection
+	u, err := url.Parse(urlStr)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return fmt.Errorf("invalid browser URL: %s", urlStr)
+	}
+
 	switch runtime.GOOS {
 	case "darwin":
-		return exec.Command("open", url).Start()
+		return exec.Command("open", urlStr).Start()
 	case "linux":
-		return exec.Command("xdg-open", url).Start()
+		return exec.Command("xdg-open", urlStr).Start()
 	case "windows":
-		return exec.Command("cmd", "/c", "start", url).Start()
+		return exec.Command("cmd", "/c", "start", urlStr).Start()
 	default:
 		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
 	}

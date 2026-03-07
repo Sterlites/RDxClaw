@@ -94,7 +94,7 @@ func (t *EditFileTool) Execute(ctx context.Context, args map[string]interface{})
 
 	newContent := strings.Replace(contentStr, oldText, newText, 1)
 
-	if err := os.WriteFile(resolvedPath, []byte(newContent), 0644); err != nil {
+	if err := os.WriteFile(resolvedPath, []byte(newContent), 0600); err != nil {
 		return ErrorResult(fmt.Sprintf("failed to write file: %v", err))
 	}
 
@@ -151,7 +151,7 @@ func (t *AppendFileTool) Execute(ctx context.Context, args map[string]interface{
 		return ErrorResult(err.Error())
 	}
 
-	f, err := os.OpenFile(resolvedPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(resolvedPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return ErrorResult(fmt.Sprintf("failed to open file: %v", err))
 	}
@@ -159,6 +159,10 @@ func (t *AppendFileTool) Execute(ctx context.Context, args map[string]interface{
 
 	if _, err := f.WriteString(content); err != nil {
 		return ErrorResult(fmt.Sprintf("failed to append to file: %v", err))
+	}
+
+	if err := f.Close(); err != nil {
+		return ErrorResult(fmt.Sprintf("failed to close file: %v", err))
 	}
 
 	return SilentResult(fmt.Sprintf("Appended to %s", path))

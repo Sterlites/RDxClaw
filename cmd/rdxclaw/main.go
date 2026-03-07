@@ -110,7 +110,7 @@ func copyDirectory(src, dst string) error {
 		}
 		defer srcFile.Close()
 
-		dstFile, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode())
+		dstFile, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 		if err != nil {
 			return err
 		}
@@ -231,7 +231,9 @@ func onboard() {
 		fmt.Printf("Config already exists at %s\n", configPath)
 		fmt.Print("Overwrite? (y/n): ")
 		var response string
-		fmt.Scanln(&response)
+		if _, err := fmt.Scanln(&response); err != nil {
+			return
+		}
 		if response != "y" {
 			fmt.Println("Aborted.")
 			return
@@ -247,7 +249,9 @@ func onboard() {
 	fmt.Print("\nSelect option (1-3): ")
 
 	var choice string
-	fmt.Scanln(&choice)
+	if _, err := fmt.Scanln(&choice); err != nil {
+		choice = "3"
+	}
 
 	reader := bufio.NewReader(os.Stdin)
 
@@ -298,7 +302,7 @@ func onboard() {
 
 func copyEmbeddedToTarget(targetDir string) error {
 	// Ensure target directory exists
-	if err := os.MkdirAll(targetDir, 0755); err != nil {
+	if err := os.MkdirAll(targetDir, 0700); err != nil {
 		return fmt.Errorf("Failed to create target directory: %w", err)
 	}
 
@@ -328,12 +332,12 @@ func copyEmbeddedToTarget(targetDir string) error {
 		targetPath := filepath.Join(targetDir, new_path)
 
 		// Ensure target file's directory exists
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0700); err != nil {
 			return fmt.Errorf("Failed to create directory %s: %w", filepath.Dir(targetPath), err)
 		}
 
 		// Write file
-		if err := os.WriteFile(targetPath, data, 0644); err != nil {
+		if err := os.WriteFile(targetPath, data, 0600); err != nil {
 			return fmt.Errorf("Failed to write file %s: %w", targetPath, err)
 		}
 
@@ -499,6 +503,11 @@ func swarmCmd() {
 			return
 		}
 		agentID := os.Args[3]
+		// Validate agentID to prevent SSRF/Path Traversal
+		if !isValidAgentID(agentID) {
+			fmt.Println("Error: Invalid agent ID format")
+			os.Exit(1)
+		}
 
 		req, _ := http.NewRequest("DELETE", baseURL+"/agents/"+agentID, nil)
 		if cfg.API.APIKey != "" {
@@ -1716,4 +1725,16 @@ func skillsShowCmd(loader *skills.SkillsLoader, skillName string) {
 	fmt.Printf("\n📦 Skill: %s\n", skillName)
 	fmt.Println("----------------------")
 	fmt.Println(content)
+}
+
+func isValidAgentID(id string) bool {
+	if len(id) == 0 || len(id) > 64 {
+		return false
+	}
+	for _, r := range id {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_') {
+			return false
+		}
+	}
+	return true
 }
