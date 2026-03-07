@@ -1,4 +1,16 @@
 const API_BASE = '/v1';
+let API_KEY = localStorage.getItem('RDXCLAW_API_KEY') || '';
+
+function setApiKey(key) {
+  API_KEY = key;
+  localStorage.setItem('RDXCLAW_API_KEY', key);
+  document.getElementById('authOverlay').classList.remove('active');
+  loadStatus();
+}
+
+function showAuth() {
+  document.getElementById('authOverlay').classList.add('active');
+}
 
 // --- Matrix Rain Canvas ---
 const canvas = document.getElementById('matrixCanvas');
@@ -101,6 +113,18 @@ document.addEventListener('DOMContentLoaded', () => {
   randomGlitch();
   
   loadStatus();
+  
+  // Auth Event Listeners
+  document.getElementById('saveKeyBtn').onclick = () => {
+    const val = document.getElementById('apiKeyInput').value.trim();
+    if (val) setApiKey(val);
+  };
+  
+  document.getElementById('authBtn').onclick = () => {
+    const val = prompt("Enter new API KEY (leave empty to clear):", API_KEY);
+    if (val !== null) setApiKey(val);
+  };
+
   // Poll every 3 seconds
   refreshInterval = setInterval(() => {
     loadStatus();
@@ -124,7 +148,21 @@ document.addEventListener('visibilitychange', () => {
 
 async function fetchJSON(endpoint, options = {}) {
   try {
-    const res = await fetch(`${API_BASE}${endpoint}`, options);
+    const headers = options.headers || {};
+    if (API_KEY) {
+      headers['Authorization'] = `Bearer ${API_KEY}`;
+    }
+
+    const res = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers: headers
+    });
+
+    if (res.status === 401) {
+      showAuth();
+      throw new Error("UNAUTHORIZED: API Key required.");
+    }
+
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     return await res.json();
   } catch (err) {
@@ -290,11 +328,19 @@ async function executeSkill(skillName) {
   if (loader) loader.classList.add('active');
 
   try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (API_KEY) headers['Authorization'] = `Bearer ${API_KEY}`;
+
     const res = await fetch(`${API_BASE}/skills/${skillName}/execute`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: headers,
       body: JSON.stringify({ input: input })
     });
+
+    if (res.status === 401) {
+      showAuth();
+      return;
+    }
     const data = await res.json();
     
     // Use correct casing from Go JSON tags
@@ -462,14 +508,22 @@ async function saveFile() {
   document.getElementById('saveBtn').disabled = true;
 
   try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (API_KEY) headers['Authorization'] = `Bearer ${API_KEY}`;
+
     const res = await fetch(`${API_BASE}/files/save`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: headers,
       body: JSON.stringify({
         path: currentlyEditingPath,
         content: content
       })
     });
+
+    if (res.status === 401) {
+      showAuth();
+      return;
+    }
     const data = await res.json();
     
     if (data.success) {
@@ -550,15 +604,23 @@ async function sendMessage() {
   loader.classList.add('active');
 
   try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (API_KEY) headers['Authorization'] = `Bearer ${API_KEY}`;
+
     const res = await fetch(`${API_BASE}/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: headers,
       body: JSON.stringify({
-        messages: chatMessages,
+        messages: chatMessages.slice(-20), // Send last 20 messages for context
         channel: 'mission-control',
         sessionKey: 'mc-' + Date.now()
       })
     });
+
+    if (res.status === 401) {
+      showAuth();
+      throw new Error("UNAUTHORIZED");
+    }
     const data = await res.json();
     
     if (data.choices && data.choices.length > 0) {

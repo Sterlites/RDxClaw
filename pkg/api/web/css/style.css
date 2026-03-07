@@ -1064,3 +1064,123 @@ body:not(.booting) .matrix-theme main { opacity: 1; transform: translateY(0); }
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(0, 255, 65, 0.2); border-radius: 10px; }
+/* Auth Overlay & Actions */
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-icon {
+  background: transparent;
+  border: 1px solid var(--matrix-dim);
+  color: var(--matrix-dim);
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-icon:hover {
+  border-color: var(--matrix-green);
+  color: var(--matrix-green);
+  box-shadow: 0 0 10px var(--matrix-glow);
+}
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.95);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 5000;
+  backdrop-filter: blur(8px);
+}
+
+.overlay.active {
+  display: flex;
+}
+
+.overlay-content {
+  background: var(--matrix-black);
+  border: 2px solid var(--matrix-green);
+  padding: 60px; /* More spacing for impact */
+  width: 600px;
+  text-align: center;
+  box-shadow: 0 0 50px rgba(0, 255, 65, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.overlay-content::before {
+  content: " ";
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(transparent 50%, rgba(0, 255, 65, 0.05) 50%);
+  background-size: 100% 4px;
+  pointer-events: none;
+}
+
+.glitch-text {
+  font-size: 2.5rem;
+  font-weight: 900;
+  margin-bottom: 24px;
+  position: relative;
+  color: var(--matrix-red);
+  text-shadow: 0 0 10px var(--matrix-red);
+}
+
+.auth-input-group {
+  margin: 32px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.auth-input-group input {
+  background: rgba(0, 255, 65, 0.05);
+  border: 1px solid var(--matrix-dim);
+  color: var(--matrix-green);
+  padding: 16px;
+  font-size: 1.2rem;
+  text-align: center;
+  letter-spacing: 0.3em;
+  width: 100%;
+}
+
+.auth-input-group button {
+  background: var(--matrix-green);
+  color: var(--matrix-black);
+  border: none;
+  padding: 16px;
+  font-weight: bold;
+  font-size: 1rem;
+  cursor: pointer;
+  letter-spacing: 0.2em;
+  transition: all 0.2s;
+}
+
+.auth-input-group button:hover {
+  background: var(--matrix-lime);
+  box-shadow: 0 0 20px var(--matrix-lime);
+  transform: scale(1.02);
+}
+
+.auth-hint {
+  font-size: 0.8rem;
+  color: var(--matrix-dim);
+  opacity: 0.7;
+}
+
+/* Ensure the topbar spans properly */
+.topbar {
+    justify-content: space-between;
+}
