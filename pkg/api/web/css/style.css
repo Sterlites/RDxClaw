@@ -623,12 +623,88 @@ tr:hover td {
 }
 
 .matrix-theme .file-item {
-  padding: 12px;
-  cursor: pointer;
-  border-bottom: 1px solid rgba(0, 255, 65, 0.1);
-  transition: all 0.2s;
-  font-size: 0.9rem;
-  color: var(--matrix-dim);
+    padding: 10px 15px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    border-bottom: 1px solid rgba(0, 255, 65, 0.1);
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.dir-item {
+    padding: 12px 15px 5px 15px;
+    font-size: 0.75rem;
+    color: var(--matrix-dim);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-weight: bold;
+}
+
+.tree-indent {
+    margin-left: 15px;
+    border-left: 1px dashed rgba(0, 255, 65, 0.2);
+}
+
+.docs-viewer-header {
+    padding: 15px 20px;
+    border-bottom: 2px solid var(--matrix-glow);
+    background: rgba(0, 255, 65, 0.05);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.file-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.btn-matrix {
+    background: transparent;
+    border: 1px solid var(--matrix-glow);
+    color: var(--matrix-glow);
+    padding: 4px 12px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-matrix:hover {
+    background: var(--matrix-glow);
+    color: var(--matrix-black);
+    box-shadow: 0 0 10px var(--matrix-glow);
+}
+
+.btn-save {
+    border-color: #fff;
+    color: #fff;
+}
+
+.btn-danger {
+    border-color: #ff3131;
+    color: #ff3131;
+}
+
+.docs-editor {
+    height: 100%;
+}
+
+.docs-editor textarea {
+    width: 100%;
+    height: calc(100vh - 250px);
+    background: var(--matrix-black);
+    color: var(--matrix-white);
+    border: none;
+    padding: 20px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1rem;
+    line-height: 1.6;
+    outline: none;
+    resize: none;
 }
 
 .matrix-theme .file-item:hover {

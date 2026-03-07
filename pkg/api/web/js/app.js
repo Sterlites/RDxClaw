@@ -316,14 +316,40 @@ async function loadFiles() {
   const activePath = document.querySelector('.file-item.active')?.dataset.path;
   
   fileList.innerHTML = '';
+  
+  // Group files by relative directory
+  const tree = {};
   data.files.forEach(file => {
-    const li = document.createElement('li');
-    li.className = 'file-item';
-    if (file.path === activePath) li.classList.add('active');
-    li.dataset.path = file.path;
-    li.innerHTML = `<span>${file.name}</span>`;
-    li.onclick = () => loadFileContent(file.path, li);
-    fileList.appendChild(li);
+    const parts = file.rel_path.split(/[\\\/]/);
+    const fileName = parts.pop();
+    const dirPath = parts.join('/') || '/';
+    
+    if (!tree[dirPath]) tree[dirPath] = [];
+    tree[dirPath].push({...file, fileName});
+  });
+
+  // Render tree
+  Object.keys(tree).sort().forEach(dir => {
+    if (dir !== '/') {
+      const dirEl = document.createElement('li');
+      dirEl.className = 'dir-item';
+      dirEl.innerText = `> ${dir}`;
+      fileList.appendChild(dirEl);
+    }
+    
+    const container = document.createElement('div');
+    if (dir !== '/') container.className = 'tree-indent';
+
+    tree[dir].sort((a,b) => a.fileName.localeCompare(b.fileName)).forEach(file => {
+      const li = document.createElement('li');
+      li.className = 'file-item';
+      if (file.path === activePath) li.classList.add('active');
+      li.dataset.path = file.path;
+      li.innerHTML = `<span>${file.fileName}</span>`;
+      li.onclick = () => loadFileContent(file.path, li);
+      container.appendChild(li);
+    });
+    fileList.appendChild(container);
   });
 
   if (data.files.length === 0) {
@@ -331,25 +357,94 @@ async function loadFiles() {
   }
 }
 
+let currentlyEditingPath = '';
+
 async function loadFileContent(path, el) {
-  // UI feedback
+  // Reset UI
+  cancelEdit();
+  
   document.querySelectorAll('.file-item').forEach(item => item.classList.remove('active'));
-  el.classList.add('active');
+  if (el) el.classList.add('active');
 
   document.getElementById('fileContent').innerText = '// PULLING_DATA_FROM_GRID...';
+  document.getElementById('docsControls').style.display = 'none';
   
   const data = await fetchJSON(`/files/content?path=${encodeURIComponent(path)}`);
-  if (!data || !data.content) {
+  if (!data || data.content === undefined) {
     document.getElementById('fileContent').innerText = 'Failed to load file content.';
     return;
   }
 
+  currentlyEditingPath = path;
   document.getElementById('currentFileName').innerText = data.name.toUpperCase();
   document.getElementById('fileContent').innerText = data.content;
+  document.getElementById('fileEditor').value = data.content;
+  document.getElementById('docsControls').style.display = 'flex';
   
   const viewer = document.querySelector('.viewer-content');
   viewer.scrollTop = 0;
 }
+
+function startEdit() {
+  document.getElementById('editBtn').style.display = 'none';
+  document.getElementById('saveControls').style.display = 'flex';
+  document.getElementById('fileContent').style.display = 'none';
+  document.getElementById('editArea').style.display = 'block';
+}
+
+function cancelEdit() {
+  document.getElementById('editBtn').style.display = 'block';
+  document.getElementById('saveControls').style.display = 'none';
+  document.getElementById('fileContent').style.display = 'block';
+  document.getElementById('editArea').style.display = 'none';
+}
+
+async function saveFile() {
+  const content = document.getElementById('fileEditor').value;
+  const originalSaveText = document.getElementById('saveBtn').innerText;
+  
+  document.getElementById('saveBtn').innerText = 'UPLOADING_DATA...';
+  document.getElementById('saveBtn').disabled = true;
+
+  try {
+    const res = await fetch(`${API_BASE}/files/save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        path: currentlyEditingPath,
+        content: content
+      })
+    });
+    const data = await res.json();
+    
+    if (data.success) {
+      document.getElementById('fileContent').innerText = content;
+      cancelEdit();
+      // Record in activity feed via loadStatus
+      loadStatus();
+    } else {
+      alert("FAIL: MISSION_CONTROL could not sync with VPS.");
+    }
+  } catch (err) {
+    console.error("Save error:", err);
+    alert("CONNECTION_LOST: Check SSH tunnel.");
+  } finally {
+    document.getElementById('saveBtn').innerText = originalSaveText;
+    document.getElementById('saveBtn').disabled = false;
+  }
+}
+
+// Attach Edit listeners
+document.addEventListener('DOMContentLoaded', () => {
+    const editBtn = document.getElementById('editBtn');
+    if (editBtn) editBtn.onclick = startEdit;
+    
+    const cancelBtn = document.getElementById('cancelBtn');
+    if (cancelBtn) cancelBtn.onclick = cancelEdit;
+    
+    const saveBtn = document.getElementById('saveBtn');
+    if (saveBtn) saveBtn.onclick = saveFile;
+});
 
 // --- Chat functionality ---
 let chatMessages = [

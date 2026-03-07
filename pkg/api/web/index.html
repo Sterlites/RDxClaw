@@ -185,13 +185,26 @@
             </ul>
           </div>
           <div class="docs-viewer">
-            <div class="viewer-header">
-              <span id="currentFileName">SELECT A FILE TO READ...</span>
-              <span id="fileModTime" class="file-meta"></span>
-            </div>
-            <div class="viewer-content">
-              <pre id="fileContent">// WAITING_FOR_UPLINK...</pre>
-            </div>
+                    <div class="docs-viewer-header">
+                        <div class="file-info">
+                            <span class="file-icon">//</span>
+                            <span id="currentFileName">SELECT A FILE TO READ...</span>
+                            <span id="fileModTime" class="file-meta"></span>
+                        </div>
+                        <div class="docs-controls" id="docsControls" style="display: none;">
+                            <button id="editBtn" class="btn-matrix">EDIT_SOURCE</button>
+                            <div id="saveControls" style="display: none;">
+                                <button id="saveBtn" class="btn-matrix btn-save">SAVE_CHANGES</button>
+                                <button id="cancelBtn" class="btn-matrix btn-danger">CANCEL</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="viewer-content">
+                        <pre id="fileContent">// WAITING_FOR_UPLINK...</pre>
+                        <div id="editArea" class="docs-editor" style="display: none;">
+                            <textarea id="fileEditor" spellcheck="false"></textarea>
+                        </div>
+                    </div>
           </div>
         </div>
       </section>

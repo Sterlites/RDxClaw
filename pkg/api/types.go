@@ -129,10 +129,17 @@ type SkillListItem struct {
 
 // FileListItem represents a file in the workspace.
 type FileListItem struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
-	Size int64  `json:"size"`
+	Name    string    `json:"name"`
+	Path    string    `json:"path"`
+	RelPath string    `json:"rel_path"`
+	Size    int64     `json:"size"`
 	ModTime time.Time `json:"mod_time"`
+}
+
+// UpdateFileRequest is the payload for saving file content
+type UpdateFileRequest struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
 }
 
 // FileContentResponse contains the content of a requested file.

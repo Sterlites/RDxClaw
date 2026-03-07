@@ -120,6 +120,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("DELETE /v1/agents/{id}", s.handleKillAgent)
 	mux.HandleFunc("GET /v1/files", s.handleListFiles)
 	mux.HandleFunc("GET /v1/files/content", s.handleGetFileContent)
+	mux.HandleFunc("POST /v1/files/save", s.handleUpdateFileContent)
 	mux.HandleFunc("GET /health", s.handleHealth)
 	mux.HandleFunc("GET /ready", s.handleHealth)
 
@@ -448,10 +449,12 @@ func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request) {
 				return nil // Skip errors
 			}
 			if !info.IsDir() && filepath.Ext(path) == ".md" {
-				// We only care about .md files for this feature as requested
+				// Calculate relative path for tree view
+				rel, _ := filepath.Rel(s.workspace, path)
 				files = append(files, FileListItem{
 					Name:    info.Name(),
 					Path:    path,
+					RelPath: rel,
 					Size:    info.Size(),
 					ModTime: info.ModTime(),
 				})
@@ -514,6 +517,52 @@ func (s *Server) handleGetFileContent(w http.ResponseWriter, r *http.Request) {
 		Path:    cleanPath,
 		Content: string(content),
 	})
+}
+
+func (s *Server) handleUpdateFileContent(w http.ResponseWriter, r *http.Request) {
+	var req UpdateFileRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_payload", "Failed to decode request body")
+		return
+	}
+
+	if req.Path == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "path is required")
+		return
+	}
+
+	// Security: Ensure path is within the allowed directories
+	cleanPath := filepath.Clean(req.Path)
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error", "Failed to resolve absolute path")
+		return
+	}
+
+	allowed := false
+	docsDirs := []string{s.workspace, filepath.Join(s.workspace, "memory")}
+	for _, dir := range docsDirs {
+		absDir, _ := filepath.Abs(dir)
+		if strings.HasPrefix(absPath, absDir) {
+			allowed = true
+			break
+		}
+	}
+
+	if !allowed {
+		writeError(w, http.StatusForbidden, "access_denied", "Access to this path is restricted")
+		return
+	}
+
+	// Write content to file
+	err = os.WriteFile(cleanPath, []byte(req.Content), 0644)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "write_error", fmt.Sprintf("Failed to save file: %v", err))
+		return
+	}
+
+	s.recordEvent("docs", "info", fmt.Sprintf("Updated file: %s", filepath.Base(cleanPath)))
+	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
