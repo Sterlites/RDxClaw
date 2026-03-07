@@ -622,29 +622,51 @@ tr:hover td {
   list-style: none;
 }
 
-.matrix-theme .file-item {
-    padding: 10px 15px;
+.tree-item {
+    padding: 6px 12px;
     cursor: pointer;
     font-size: 0.85rem;
-    border-bottom: 1px solid rgba(0, 255, 65, 0.1);
     transition: all 0.2s;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+    user-select: none;
+    border-left: 1px solid transparent;
 }
 
-.dir-item {
-    padding: 12px 15px 5px 15px;
-    font-size: 0.75rem;
+.tree-item:hover {
+    background: rgba(0, 255, 65, 0.1);
+    border-left: 2px solid var(--matrix-glow);
+}
+
+.tree-item.active {
+    background: rgba(0, 255, 65, 0.2);
+    border-left: 2px solid var(--matrix-glow);
+    color: var(--matrix-white);
+}
+
+.folder-item {
     color: var(--matrix-dim);
-    text-transform: uppercase;
-    letter-spacing: 2px;
     font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
 }
 
-.tree-indent {
-    margin-left: 15px;
+.folder-toggle {
+    display: inline-block;
+    width: 12px;
+    font-size: 0.6rem;
+    color: var(--matrix-dim);
+}
+
+.folder-icon, .file-icon {
+    font-size: 1rem;
+    opacity: 0.7;
+}
+
+.folder-children {
     border-left: 1px dashed rgba(0, 255, 65, 0.2);
+    margin-left: 18px;
 }
 
 .docs-viewer-header {

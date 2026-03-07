@@ -317,43 +317,82 @@ async function loadFiles() {
   
   fileList.innerHTML = '';
   
-  // Group files by relative directory
-  const tree = {};
+  // Build Nested Tree Structure
+  const root = { name: 'root', type: 'folder', children: {}, open: true };
+  
   data.files.forEach(file => {
     const parts = file.rel_path.split(/[\\\/]/);
-    const fileName = parts.pop();
-    const dirPath = parts.join('/') || '/';
+    let current = root;
     
-    if (!tree[dirPath]) tree[dirPath] = [];
-    tree[dirPath].push({...file, fileName});
-  });
-
-  // Render tree
-  Object.keys(tree).sort().forEach(dir => {
-    if (dir !== '/') {
-      const dirEl = document.createElement('li');
-      dirEl.className = 'dir-item';
-      dirEl.innerText = `> ${dir}`;
-      fileList.appendChild(dirEl);
-    }
-    
-    const container = document.createElement('div');
-    if (dir !== '/') container.className = 'tree-indent';
-
-    tree[dir].sort((a,b) => a.fileName.localeCompare(b.fileName)).forEach(file => {
-      const li = document.createElement('li');
-      li.className = 'file-item';
-      if (file.path === activePath) li.classList.add('active');
-      li.dataset.path = file.path;
-      li.innerHTML = `<span>${file.fileName}</span>`;
-      li.onclick = () => loadFileContent(file.path, li);
-      container.appendChild(li);
+    parts.forEach((part, index) => {
+      const isLast = index === parts.length - 1;
+      if (isLast) {
+        current.children[part] = { ...file, type: 'file', name: part };
+      } else {
+        if (!current.children[part]) {
+          current.children[part] = { name: part, type: 'folder', children: {}, open: true };
+        }
+        current = current.children[part];
+      }
     });
-    fileList.appendChild(container);
   });
+
+  // Recursive Render Function
+  function renderTree(node, container, level = 0) {
+    const sortedKeys = Object.keys(node.children).sort((a, b) => {
+      const nodeA = node.children[a];
+      const nodeB = node.children[b];
+      if (nodeA.type !== nodeB.type) return nodeA.type === 'folder' ? -1 : 1;
+      return a.localeCompare(b);
+    });
+
+    sortedKeys.forEach(key => {
+      const item = node.children[key];
+      const itemEl = document.createElement('div');
+      itemEl.className = `tree-item ${item.type}-item`;
+      itemEl.style.paddingLeft = `${level * 15}px`;
+
+      if (item.type === 'folder') {
+        itemEl.innerHTML = `
+          <span class="folder-toggle">${item.open ? '▼' : '▶'}</span>
+          <span class="folder-icon">📁</span>
+          <span class="folder-name">${item.name}</span>
+        `;
+        
+        const childrenContainer = document.createElement('div');
+        childrenContainer.className = 'folder-children';
+        if (!item.open) childrenContainer.style.display = 'none';
+
+        itemEl.onclick = (e) => {
+          e.stopPropagation();
+          item.open = !item.open;
+          itemEl.querySelector('.folder-toggle').innerText = item.open ? '▼' : '▶';
+          childrenContainer.style.display = item.open ? 'block' : 'none';
+        };
+
+        container.appendChild(itemEl);
+        container.appendChild(childrenContainer);
+        renderTree(item, childrenContainer, level + 1);
+      } else {
+        itemEl.innerHTML = `
+          <span class="file-icon">📄</span>
+          <span class="file-name">${item.name}</span>
+        `;
+        if (item.path === activePath) itemEl.classList.add('active');
+        itemEl.dataset.path = item.path;
+        itemEl.onclick = (e) => {
+          e.stopPropagation();
+          loadFileContent(item.path, itemEl);
+        };
+        container.appendChild(itemEl);
+      }
+    });
+  }
+
+  renderTree(root, fileList);
 
   if (data.files.length === 0) {
-    fileList.innerHTML = '<li class="file-item">No markdown files found.</li>';
+    fileList.innerHTML = '<div class="tree-item">No markdown files found.</div>';
   }
 }
 
