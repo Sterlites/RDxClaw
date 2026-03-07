@@ -836,6 +836,7 @@ func (al *AgentLoop) forceCompression(sessionKey string) {
 // GetStartupInfo returns information about loaded tools and skills for logging.
 func (al *AgentLoop) GetStartupInfo() map[string]interface{} {
 	info := make(map[string]interface{})
+	info["model"] = al.model
 
 	// Tools info
 	tools := al.tools.List()
