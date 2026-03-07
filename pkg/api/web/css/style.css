@@ -520,31 +520,50 @@ tr:hover td {
   font-weight: 400;
 }
 
-.msg.user .msg-bubble {
-  background-color: #2563eb;
-  color: white;
-  border-bottom-right-radius: 4px;
+.matrix-theme .msg.user .msg-bubble {
+  background-color: rgba(0, 59, 0, 0.4);
+  color: var(--matrix-lime);
+  border: 1px solid var(--matrix-green);
+  border-bottom-right-radius: 0;
+  box-shadow: 0 0 10px rgba(0, 255, 65, 0.1);
 }
 
-.msg.agent .msg-bubble {
-  background-color: var(--bg-hover);
-  border: 1px solid var(--border-subtle);
-  border-bottom-left-radius: 4px;
+.matrix-theme .msg.agent .msg-bubble {
+  background-color: rgba(0, 0, 0, 0.6);
+  color: var(--matrix-white); /* Better legibility */
+  border: 1px solid var(--matrix-dim);
+  border-bottom-left-radius: 0;
 }
 
-.terminal-input {
-  display: flex;
-  padding: 16px;
-  background-color: var(--bg-card);
-  border-top: 1px solid var(--border-subtle);
-  gap: 12px;
+.matrix-theme .msg-bubble {
+  line-height: 1.6;
+  font-size: 1rem;
+  padding: 15px 20px;
 }
 
-.terminal-input textarea {
-  resize: none;
-  height: 44px;
-  line-height: 22px;
+
+.matrix-theme .terminal-input {
+  flex-direction: column; /* Stack for more width */
+  background: var(--matrix-black);
+  border-top: 1px solid var(--matrix-green);
+  padding: 20px;
 }
+
+.matrix-theme .terminal-input textarea {
+  height: 100px;
+  background: rgba(0, 20, 0, 0.3);
+  border: 1px solid var(--matrix-dim);
+  padding: 15px;
+  font-size: 1rem;
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.matrix-theme .terminal-input button {
+  align-self: flex-end;
+  min-width: 150px;
+}
+
 
 /* Badge variants */
 .badge {
