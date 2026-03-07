@@ -347,8 +347,8 @@ async function executeSkill(skillName) {
     const resultText = data.result || data.error || "Skill returned empty response";
     
     // Integrate with Chat Terminal for comprehensive visibility
-    chatMessages.push({ role: 'user', content: `[Manual Skill Test: ${skillName}]\nInput: ${input}` });
-    chatMessages.push({ role: 'assistant', content: resultText });
+    chatMessages.push({ role: 'user', content: `[Manual Skill Test: ${skillName}]\nInput: ${input}`, timestamp: new Date() });
+    chatMessages.push({ role: 'assistant', content: resultText, timestamp: new Date(), telemetry: data.duration });
     renderChat();
 
     // Still show alert if user isn't looking at the chat
@@ -579,7 +579,7 @@ function renderChat() {
     div.innerHTML = `
       <div class="msg-meta">
         <span class="msg-role">${isAgent ? '[ AGENT_UPLINK ]' : '[ COMMANDER ]'}</span>
-        <span class="msg-time">${time}</span>
+        <span class="msg-time">${time}${msg.telemetry ? ` // LATENCY: ${msg.telemetry}ms` : ''}</span>
       </div>
       <div class="msg-bubble ${isLast && isAgent ? 'typing' : ''}">${escapeHTML(msg.content)}</div>
     `;
@@ -602,6 +602,7 @@ async function sendMessage() {
 
   const loader = document.getElementById('chatLoader');
   loader.classList.add('active');
+  const startTime = Date.now();
 
   try {
     const headers = { 'Content-Type': 'application/json' };
@@ -623,9 +624,11 @@ async function sendMessage() {
     }
     const data = await res.json();
     
+    const duration = Date.now() - startTime;
     if (data.choices && data.choices.length > 0) {
       const assistantMsg = data.choices[0].message;
       assistantMsg.timestamp = new Date();
+      assistantMsg.telemetry = duration;
       chatMessages.push(assistantMsg);
     } else {
       chatMessages.push({ role: 'assistant', content: 'Error: Cannot communicate with brain.', timestamp: new Date() });
