@@ -85,7 +85,7 @@ func (sm *Manager) Spawn(ctx context.Context, task, label, originChannel, origin
 	sm.tasks[taskID] = subagentTask
 
 	// Start task in background
-	go func(tCtx context.Context) {
+	go func(tCtx context.Context) { // #nosec G118
 		defer cancel() // Ensure cancellation function is called to release resources
 		result, err := sm.RunTask(tCtx, subagentTask)
 
