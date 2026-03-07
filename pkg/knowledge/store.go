@@ -17,7 +17,7 @@ type Store struct {
 
 // NewStore initializes a new knowledge store in the given directory.
 func NewStore(baseDir string) (*Store, error) {
-	if err := os.MkdirAll(baseDir, 0755); err != nil {
+	if err := os.MkdirAll(baseDir, 0700); err != nil { // #nosec G301
 		return nil, fmt.Errorf("failed to create knowledge store directory: %w", err)
 	}
 

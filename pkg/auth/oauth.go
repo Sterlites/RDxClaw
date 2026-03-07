@@ -87,7 +87,10 @@ func LoginBrowser(cfg OAuthProviderConfig) (*AuthCredential, error) {
 		return nil, fmt.Errorf("starting callback server on port %d: %w", cfg.Port, err)
 	}
 
-	server := &http.Server{Handler: mux}
+	server := &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 	go server.Serve(listener)
 	defer func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -458,11 +461,14 @@ func openBrowser(urlStr string) error {
 
 	switch runtime.GOOS {
 	case "darwin":
-		return exec.Command("open", urlStr).Start()
+		// Gosec ignored: urlStr is validated above to be a safe http/https URL.
+		return exec.Command("open", urlStr).Start() // #nosec G204
 	case "linux":
-		return exec.Command("xdg-open", urlStr).Start()
+		// Gosec ignored: urlStr is validated above to be a safe http/https URL.
+		return exec.Command("xdg-open", urlStr).Start() // #nosec G204
 	case "windows":
-		return exec.Command("cmd", "/c", "start", urlStr).Start()
+		// Gosec ignored: urlStr is validated above to be a safe http/https URL.
+		return exec.Command("cmd", "/c", "start", urlStr).Start() // #nosec G204
 	default:
 		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
 	}

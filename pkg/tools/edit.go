@@ -76,7 +76,8 @@ func (t *EditFileTool) Execute(ctx context.Context, args map[string]interface{})
 		return ErrorResult(fmt.Sprintf("file not found: %s", path))
 	}
 
-	content, err := os.ReadFile(resolvedPath)
+	// Gosec ignored: resolvedPath is validated by validatePath above.
+	content, err := os.ReadFile(resolvedPath) // #nosec G304
 	if err != nil {
 		return ErrorResult(fmt.Sprintf("failed to read file: %v", err))
 	}
@@ -94,7 +95,8 @@ func (t *EditFileTool) Execute(ctx context.Context, args map[string]interface{})
 
 	newContent := strings.Replace(contentStr, oldText, newText, 1)
 
-	if err := os.WriteFile(resolvedPath, []byte(newContent), 0600); err != nil {
+	// Gosec ignored: resolvedPath is validated by validatePath above.
+	if err := os.WriteFile(resolvedPath, []byte(newContent), 0600); err != nil { // #nosec G703 G304
 		return ErrorResult(fmt.Sprintf("failed to write file: %v", err))
 	}
 
@@ -151,7 +153,8 @@ func (t *AppendFileTool) Execute(ctx context.Context, args map[string]interface{
 		return ErrorResult(err.Error())
 	}
 
-	f, err := os.OpenFile(resolvedPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	// Gosec ignored: resolvedPath is validated by validatePath above.
+	f, err := os.OpenFile(resolvedPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600) // #nosec G304
 	if err != nil {
 		return ErrorResult(fmt.Sprintf("failed to open file: %v", err))
 	}

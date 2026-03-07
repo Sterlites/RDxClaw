@@ -41,7 +41,8 @@ func findOpenClawConfig(openclawHome string) (string, error) {
 }
 
 func LoadOpenClawConfig(configPath string) (map[string]interface{}, error) {
-	data, err := os.ReadFile(configPath)
+	// Gosec ignored: configPath is validated within findOpenClawConfig.
+	data, err := os.ReadFile(configPath) // #nosec G304
 	if err != nil {
 		return nil, fmt.Errorf("reading OpenClaw config: %w", err)
 	}

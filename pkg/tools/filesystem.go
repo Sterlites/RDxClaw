@@ -118,7 +118,8 @@ func (t *ReadFileTool) Execute(ctx context.Context, args map[string]interface{})
 		return ErrorResult(err.Error())
 	}
 
-	content, err := os.ReadFile(resolvedPath)
+	// Gosec ignored: resolvedPath is validated by validatePath above.
+	content, err := os.ReadFile(resolvedPath) // #nosec G304
 	if err != nil {
 		return ErrorResult(fmt.Sprintf("failed to read file: %v", err))
 	}

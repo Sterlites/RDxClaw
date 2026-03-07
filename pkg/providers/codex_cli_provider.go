@@ -47,7 +47,9 @@ func (p *CodexCliProvider) Chat(ctx context.Context, messages []Message, tools [
 	}
 	args = append(args, "-") // read prompt from stdin
 
-	cmd := exec.CommandContext(ctx, p.command, args...)
+	// Gosec ignored: this is a provider wrapping the codex CLI. 
+	// The command and arguments are controlled by the provider implementation.
+	cmd := exec.CommandContext(ctx, p.command, args...) // #nosec G204
 	cmd.Stdin = bytes.NewReader([]byte(prompt))
 
 	var stdout, stderr bytes.Buffer

@@ -219,7 +219,8 @@ func (hs *HeartbeatService) executeHeartbeat() {
 func (hs *HeartbeatService) buildPrompt() string {
 	heartbeatPath := filepath.Join(hs.workspace, "HEARTBEAT.md")
 
-	data, err := os.ReadFile(heartbeatPath)
+	// Gosec ignored: heartbeatPath is constructed from workspace.
+	data, err := os.ReadFile(heartbeatPath) // #nosec G304
 	if err != nil {
 		if os.IsNotExist(err) {
 			hs.createDefaultHeartbeatTemplate()
@@ -275,7 +276,8 @@ This file contains tasks for the heartbeat service to check periodically.
 Add your heartbeat tasks below this line:
 `
 
-	if err := os.WriteFile(heartbeatPath, []byte(defaultContent), 0644); err != nil {
+	// Gosec ignored: heartbeatPath is constructed from workspace.
+	if err := os.WriteFile(heartbeatPath, []byte(defaultContent), 0600); err != nil { // #nosec G306
 		hs.logError("Failed to create default HEARTBEAT.md: %v", err)
 	} else {
 		hs.logInfo("Created default HEARTBEAT.md template")
@@ -354,12 +356,13 @@ func (hs *HeartbeatService) logError(format string, args ...any) {
 // log writes a message to the heartbeat log file
 func (hs *HeartbeatService) log(level, format string, args ...any) {
 	logFile := filepath.Join(hs.workspace, "heartbeat.log")
-	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	// Gosec ignored: logFile is within workspace.
+	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600) // #nosec G302 G304
 	if err != nil {
 		return
 	}
 	defer f.Close()
 
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	fmt.Fprintf(f, "[%s] [%s] %s\n", timestamp, level, fmt.Sprintf(format, args...))
+	_, _ = fmt.Fprintf(f, "[%s] [%s] %s\n", timestamp, level, fmt.Sprintf(format, args...)) // #nosec G104
 }

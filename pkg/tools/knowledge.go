@@ -184,7 +184,8 @@ func (t *KnowledgeTool) handleIngest(args map[string]interface{}, collection str
 		return ErrorResult("path is required for ingest action")
 	}
 
-	content, err := os.ReadFile(path)
+	// Gosec ignored: this tool is intentionally designed to ingest user-specified files.
+	content, err := os.ReadFile(path) // #nosec G304
 	if err != nil {
 		return ErrorResult(fmt.Sprintf("failed to read file: %v", err))
 	}

@@ -95,8 +95,9 @@ func (c *LINEChannel) Start(ctx context.Context) error {
 
 	addr := fmt.Sprintf("%s:%d", c.config.WebhookHost, c.config.WebhookPort)
 	c.httpServer = &http.Server{
-		Addr:    addr,
-		Handler: mux,
+		Addr:              addr,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	go func() {

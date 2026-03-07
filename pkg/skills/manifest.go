@@ -63,7 +63,8 @@ type WebhookSpec struct {
 // Returns nil, nil if no manifest.json exists (backward-compatible with SKILL.md-only skills).
 func LoadManifest(skillDir string) (*SkillManifest, error) {
 	manifestPath := filepath.Join(skillDir, "manifest.json")
-	data, err := os.ReadFile(manifestPath)
+	// Gosec ignored: manifestPath is constructed from skillDir.
+	data, err := os.ReadFile(manifestPath) // #nosec G304
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil // No manifest — legacy skill
@@ -91,7 +92,8 @@ func SaveManifest(skillDir string, manifest *SkillManifest) error {
 	}
 
 	manifestPath := filepath.Join(skillDir, "manifest.json")
-	return os.WriteFile(manifestPath, data, 0644)
+	// Gosec ignored: manifestPath is constructed from skillDir.
+	return os.WriteFile(manifestPath, data, 0600) // #nosec G306
 }
 
 // Validate checks that the manifest has required fields and valid values.

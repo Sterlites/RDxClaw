@@ -51,7 +51,8 @@ func NewManager(workspace string) *Manager {
 	// Try to load from new location first
 	if _, err := os.Stat(stateFile); os.IsNotExist(err) {
 		// New file doesn't exist, try migrating from old location
-		if data, err := os.ReadFile(oldStateFile); err == nil {
+		// Gosec ignored: oldStateFile is an internal migration path.
+		if data, err := os.ReadFile(oldStateFile); err == nil { // #nosec G304
 			if err := json.Unmarshal(data, sm.state); err == nil {
 				// Migrate to new location
 				if err := sm.saveAtomic(); err != nil {

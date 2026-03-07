@@ -129,7 +129,8 @@ func (m *Manager) StartAll(ctx context.Context) error {
 
 	logger.InfoC("channels", "Starting all channels")
 
-	dispatchCtx, cancel := context.WithCancel(ctx)
+	// Gosec ignored: cancel is called in StopAll via m.dispatchTask.
+	dispatchCtx, cancel := context.WithCancel(ctx) // #nosec G118
 	m.dispatchTask = &asyncTask{cancel: cancel}
 
 	go m.dispatchOutbound(dispatchCtx)

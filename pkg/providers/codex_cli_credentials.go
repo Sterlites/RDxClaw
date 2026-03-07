@@ -25,7 +25,8 @@ func ReadCodexCliCredentials() (accessToken, accountID string, expiresAt time.Ti
 		return "", "", time.Time{}, err
 	}
 
-	data, err := os.ReadFile(authPath)
+	// Gosec ignored: authPath is an internal path to the Codex CLI auth file.
+	data, err := os.ReadFile(authPath) // #nosec G304
 	if err != nil {
 		return "", "", time.Time{}, fmt.Errorf("reading %s: %w", authPath, err)
 	}

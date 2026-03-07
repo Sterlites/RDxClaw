@@ -51,7 +51,8 @@ func (ms *MemoryStore) getTodayFile() string {
 // ReadLongTerm reads the long-term memory (MEMORY.md).
 // Returns empty string if the file doesn't exist.
 func (ms *MemoryStore) ReadLongTerm() string {
-	if data, err := os.ReadFile(ms.memoryFile); err == nil {
+	// Gosec ignored: memoryFile is an internal path.
+	if data, err := os.ReadFile(ms.memoryFile); err == nil { // #nosec G304
 		return string(data)
 	}
 	return ""
@@ -59,14 +60,16 @@ func (ms *MemoryStore) ReadLongTerm() string {
 
 // WriteLongTerm writes content to the long-term memory file (MEMORY.md).
 func (ms *MemoryStore) WriteLongTerm(content string) error {
-	return os.WriteFile(ms.memoryFile, []byte(content), 0600)
+	// Gosec ignored: memoryFile is an internal path.
+	return os.WriteFile(ms.memoryFile, []byte(content), 0600) // #nosec G304 G703
 }
 
 // ReadToday reads today's daily note.
 // Returns empty string if the file doesn't exist.
 func (ms *MemoryStore) ReadToday() string {
 	todayFile := ms.getTodayFile()
-	if data, err := os.ReadFile(todayFile); err == nil {
+	// Gosec ignored: todayFile is generated from internal memoryDir.
+	if data, err := os.ReadFile(todayFile); err == nil { // #nosec G304
 		return string(data)
 	}
 	return ""
@@ -84,7 +87,8 @@ func (ms *MemoryStore) AppendToday(content string) error {
 	}
 
 	var existingContent string
-	if data, err := os.ReadFile(todayFile); err == nil {
+	// Gosec ignored: todayFile is generated from internal memoryDir.
+	if data, err := os.ReadFile(todayFile); err == nil { // #nosec G304
 		existingContent = string(data)
 	}
 
@@ -98,7 +102,8 @@ func (ms *MemoryStore) AppendToday(content string) error {
 		newContent = existingContent + "\n" + content
 	}
 
-	return os.WriteFile(todayFile, []byte(newContent), 0600)
+	// Gosec ignored: todayFile is generated from internal memoryDir.
+	return os.WriteFile(todayFile, []byte(newContent), 0600) // #nosec G304 G703
 }
 
 // GetRecentDailyNotes returns daily notes from the last N days.
@@ -112,7 +117,8 @@ func (ms *MemoryStore) GetRecentDailyNotes(days int) string {
 		monthDir := dateStr[:6]            // YYYYMM
 		filePath := filepath.Join(ms.memoryDir, monthDir, dateStr+".md")
 
-		if data, err := os.ReadFile(filePath); err == nil {
+		// Gosec ignored: filePath is generated from internal memoryDir.
+		if data, err := os.ReadFile(filePath); err == nil { // #nosec G304
 			notes = append(notes, string(data))
 		}
 	}

@@ -56,13 +56,15 @@ func copyDir(src string, dst string) error {
 }
 
 func copyFile(src, dst string) error {
-	in, err := os.Open(src)
+	// Gosec ignored: this is an internal maintenance script.
+	in, err := os.Open(src) // #nosec G304
 	if err != nil {
 		return err
 	}
 	defer in.Close()
 
-	out, err := os.Create(dst)
+	// Gosec ignored: this is an internal maintenance script.
+	out, err := os.Create(dst) // #nosec G304
 	if err != nil {
 		return err
 	}

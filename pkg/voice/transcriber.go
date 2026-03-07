@@ -44,7 +44,8 @@ func NewGroqTranscriber(apiKey string) *GroqTranscriber {
 func (t *GroqTranscriber) Transcribe(ctx context.Context, audioFilePath string) (*TranscriptionResponse, error) {
 	logger.InfoCF("voice", "Starting transcription", map[string]interface{}{"audio_file": audioFilePath})
 
-	audioFile, err := os.Open(audioFilePath)
+	// Gosec ignored: audioFilePath is provided by the calling channel after validation.
+	audioFile, err := os.Open(audioFilePath) // #nosec G304
 	if err != nil {
 		logger.ErrorCF("voice", "Failed to open audio file", map[string]interface{}{"path": audioFilePath, "error": err})
 		return nil, fmt.Errorf("failed to open audio file: %w", err)

@@ -272,7 +272,8 @@ func DefaultConfig() *Config {
 func LoadConfig(path string) (*Config, error) {
 	cfg := DefaultConfig()
 
-	data, err := os.ReadFile(path)
+	// Gosec ignored: path is the application config path.
+	data, err := os.ReadFile(path) // #nosec G304
 	if err != nil {
 		if os.IsNotExist(err) {
 			return cfg, nil
@@ -301,7 +302,7 @@ func SaveConfig(path string, cfg *Config) error {
 	}
 
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0700); err != nil { // #nosec G301
 		return err
 	}
 

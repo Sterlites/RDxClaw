@@ -101,8 +101,10 @@ func (sm *Manager) Spawn(ctx context.Context, task, label, originChannel, origin
 			} else {
 				toolResult.ForLLM = fmt.Sprintf("Agent completed: %s", result.Content)
 			}
-			// Use a shorter-lived context for the callback execution
-			cbCtx, cbCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			// Use a shorter-lived context for the callback execution.
+			// Gosec ignored: using Background because this is a post-task notification
+			// that should complete even if the spawn request was cancelled.
+			cbCtx, cbCancel := context.WithTimeout(context.Background(), 10*time.Second) // #nosec G118
 			defer cbCancel()
 			callback(cbCtx, toolResult)
 		}

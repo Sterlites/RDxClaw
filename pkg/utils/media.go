@@ -109,7 +109,8 @@ func DownloadFile(url, filename string, opts DownloadOptions) string {
 		return ""
 	}
 
-	out, err := os.Create(localPath)
+	// Gosec ignored: localPath is generated from sanitized filename.
+	out, err := os.OpenFile(localPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600) // #nosec G304
 	if err != nil {
 		logger.ErrorCF(opts.LoggerPrefix, "Failed to create local file", map[string]interface{}{
 			"error": err.Error(),

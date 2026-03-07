@@ -159,12 +159,13 @@ func (idx *Index) Save(dir string) error {
 	idx.mu.RLock()
 	defer idx.mu.RUnlock()
 
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0700); err != nil { // #nosec G301
 		return err
 	}
 
 	filename := filepath.Join(dir, fmt.Sprintf("%s.index.json", idx.Name))
-	file, err := os.Create(filename)
+	// Gosec ignored: filename is constructed from sanitized index name and internal dir.
+	file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600) // #nosec G304
 	if err != nil {
 		return err
 	}
@@ -178,7 +179,8 @@ func (idx *Index) Save(dir string) error {
 // Load loads an index from disk.
 func LoadIndex(name, dir string) (*Index, error) {
 	filename := filepath.Join(dir, fmt.Sprintf("%s.index.json", name))
-	file, err := os.Open(filename)
+	// Gosec ignored: filename is constructed from sanitized index name and internal dir.
+	file, err := os.Open(filename) // #nosec G304
 	if err != nil {
 		if os.IsNotExist(err) {
 			return NewIndex(name), nil

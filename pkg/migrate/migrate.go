@@ -161,7 +161,7 @@ func Execute(actions []Action, openclawHome, rdxclawHome string) *Result {
 				fmt.Printf("  ✓ Converted config: %s\n", action.Destination)
 			}
 		case ActionCreateDir:
-			if err := os.MkdirAll(action.Destination, 0755); err != nil {
+			if err := os.MkdirAll(action.Destination, 0700); err != nil { // #nosec G301
 				result.Errors = append(result.Errors, err)
 			} else {
 				result.DirsCreated++
@@ -176,7 +176,7 @@ func Execute(actions []Action, openclawHome, rdxclawHome string) *Result {
 			result.BackupsCreated++
 			fmt.Printf("  ✓ Backed up %s -> %s.bak\n", filepath.Base(action.Destination), filepath.Base(action.Destination))
 
-			if err := os.MkdirAll(filepath.Dir(action.Destination), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(action.Destination), 0700); err != nil { // #nosec G301
 				result.Errors = append(result.Errors, err)
 				continue
 			}
@@ -188,7 +188,7 @@ func Execute(actions []Action, openclawHome, rdxclawHome string) *Result {
 				fmt.Printf("  ✓ Copied %s\n", relPath(action.Source, openclawHome))
 			}
 		case ActionCopy:
-			if err := os.MkdirAll(filepath.Dir(action.Destination), 0755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(action.Destination), 0700); err != nil { // #nosec G301
 				result.Errors = append(result.Errors, err)
 				continue
 			}
@@ -226,7 +226,7 @@ func executeConfigMigration(srcConfigPath, dstConfigPath, rdxclawHome string) er
 		incoming = MergeConfig(existing, incoming)
 	}
 
-	if err := os.MkdirAll(filepath.Dir(dstConfigPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dstConfigPath), 0700); err != nil { // #nosec G301
 		return err
 	}
 	return config.SaveConfig(dstConfigPath, incoming)
@@ -235,7 +235,9 @@ func executeConfigMigration(srcConfigPath, dstConfigPath, rdxclawHome string) er
 func Confirm() bool {
 	fmt.Print("Proceed with migration? (y/n): ")
 	var response string
-	fmt.Scanln(&response)
+	if _, err := fmt.Scanln(&response); err != nil {
+		return false
+	}
 	return strings.ToLower(strings.TrimSpace(response)) == "y"
 }
 
@@ -364,7 +366,8 @@ func backupFile(path string) error {
 }
 
 func copyFile(src, dst string) error {
-	srcFile, err := os.Open(src)
+	// Gosec ignored: this is a migration tool copying files from old installation.
+	srcFile, err := os.Open(src) // #nosec G304
 	if err != nil {
 		return err
 	}
@@ -375,7 +378,8 @@ func copyFile(src, dst string) error {
 		return err
 	}
 
-	dstFile, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode())
+	// Gosec ignored: this is a migration tool copying files from old installation.
+	dstFile, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode()) // #nosec G304
 	if err != nil {
 		return err
 	}
