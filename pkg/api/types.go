@@ -95,7 +95,8 @@ type SystemStats struct {
 	MemoryUsage string  `json:"memory_usage"`
 	CPULoad     float64 `json:"cpu_load"` // Added for more data points
 	Goroutines  int     `json:"goroutines"`
-	Threads     int     `json:"threads"`
+	Threads     int     `json:"threads"`      // OS Threads
+	HeapObjects uint64  `json:"heap_objects"` // Total heap objects
 }
 
 // WorkspaceStats contains metrics about the RDxClaw workspace.

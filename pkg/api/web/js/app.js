@@ -28,7 +28,15 @@ function drawMatrix() {
 
   for (let i = 0; i < drops.length; i++) {
     const text = chars[Math.floor(Math.random() * chars.length)];
+    
+    // Depth effect: some characters are brighter and larger
+    const isBright = Math.random() > 0.95;
+    ctx.fillStyle = isBright ? '#39ff14' : '#00ff41';
+    ctx.font = (isBright ? fontSize + 4 : fontSize) + 'px "Share Tech Mono"';
+    if (isBright) ctx.shadowBlur = 15;
+    
     ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+    ctx.shadowBlur = 0;
 
     if (drops[i] * fontSize > height && Math.random() > 0.975) {
       drops[i] = 0;
@@ -159,6 +167,8 @@ async function loadStatus() {
   if (data.system) {
     updateVal('memoryVal', data.system.memory_usage || '32MB');
     updateVal('goroutinesVal', data.system.goroutines || '12');
+    updateVal('threadsVal', data.system.threads || '--');
+    updateVal('heapVal', data.system.heap_objects ? (data.system.heap_objects / 1000).toFixed(1) + 'K' : '--');
     updateVal('loadVal', ((data.system.cpu_load || 0.4) * 100).toFixed(0) + '%');
   }
 

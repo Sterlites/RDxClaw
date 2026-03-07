@@ -374,6 +374,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 			CPULoad:     0.5, // Mock value as real CPU load requires external libs/syscalls
 			Goroutines:  runtime.NumGoroutine(),
 			Threads:     numThreads,
+			HeapObjects: m.HeapObjects,
 		},
 		Workspace: s.getWorkspaceStats(),
 	})

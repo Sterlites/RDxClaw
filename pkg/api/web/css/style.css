@@ -59,6 +59,19 @@
   z-index: 0;
   opacity: 0.25; /* Even higher for a "good" effect as requested */
   pointer-events: none;
+  animation: crt-flicker 0.15s infinite;
+}
+
+@keyframes crt-flicker {
+  0% { opacity: 0.23; }
+  5% { opacity: 0.25; }
+  10% { opacity: 0.24; }
+  15% { opacity: 0.26; }
+  20% { opacity: 0.23; }
+  25% { opacity: 0.27; }
+  30% { opacity: 0.24; }
+  35% { opacity: 0.25; }
+  100% { opacity: 0.23; }
 }
 
 .scanlines {
@@ -79,7 +92,27 @@
   background-size: 100% 4px, 1px 1px;
   z-index: 2000;
   pointer-events: none;
-  opacity: 0.05;
+  opacity: 0.1;
+}
+
+.scanlines::before {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(to bottom, rgba(18, 16, 16, 0) 0%, rgba(255, 255, 255, 0.03) 50%, rgba(18, 16, 16, 0) 100%);
+  background-size: 100% 100%;
+  z-index: 2001;
+  pointer-events: none;
+  animation: scanline 8s linear infinite;
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
 }
 
 /* Base resets for Matrix theme elements */
@@ -318,7 +351,14 @@ main {
 .matrix-theme .card:hover {
   transform: translateY(-2px);
   border-color: var(--matrix-lime);
-  box-shadow: 0 0 30px rgba(0, 255, 65, 0.15);
+  box-shadow: 0 0 30px rgba(0, 255, 65, 0.2);
+  background: rgba(0, 30, 0, 0.95);
+}
+
+.matrix-theme .card:hover::before,
+.matrix-theme .card:hover::after {
+  border-color: var(--matrix-lime);
+  box-shadow: 0 0 10px var(--matrix-lime);
 }
 
 .matrix-theme .card-title {
@@ -331,10 +371,12 @@ main {
 
 .matrix-theme .card-value {
   color: var(--matrix-white);
-  font-family: 'Courier New', Courier, monospace; /* Use monospaced for numbers if Digital-7 isn't available */
-  font-size: 2.5rem;
-  text-shadow: 0 0 10px var(--matrix-green);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 2.8rem;
+  text-shadow: 0 0 15px var(--matrix-green), 0 0 2px var(--matrix-white);
   margin-top: 15px;
+  letter-spacing: -1px;
+  font-weight: bold;
 }
 
 
@@ -924,7 +966,8 @@ tr:hover td {
 
 .matrix-theme .activity-time {
   font-size: 0.7rem;
-  color: var(--matrix-darkgreen);
+  color: var(--matrix-dim);
+  opacity: 0.8;
 }
 
 .matrix-theme .activity-msg {
