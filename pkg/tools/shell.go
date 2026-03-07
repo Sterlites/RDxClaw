@@ -31,6 +31,8 @@ func NewExecTool(workingDir string, restrict bool) *ExecTool {
 		regexp.MustCompile(`>\s*/dev/sd[a-z]\b`), // Block writes to disk devices (but allow /dev/null)
 		regexp.MustCompile(`\b(shutdown|reboot|poweroff)\b`),
 		regexp.MustCompile(`:\(\)\s*\{.*\};\s*:`),
+		regexp.MustCompile(`\bfind\b.*\s-delete\b`),
+		regexp.MustCompile(`\b(nc|netcat|nmap|telnet)\b`), // Block network tools
 	}
 
 	return &ExecTool{
@@ -172,31 +174,53 @@ func (t *ExecTool) guardCommand(command, cwd string) string {
 	}
 
 	if t.restrictToWorkspace {
+		// Block obvious traversal
 		if strings.Contains(cmd, "..\\") || strings.Contains(cmd, "../") {
 			return "Command blocked by safety guard (path traversal detected)"
 		}
 
-		cwdPath, err := filepath.Abs(cwd)
-		if err != nil {
-			return ""
+		// Block command chaining with root or sensitive dirs
+		if strings.Contains(cmd, "; cd /") || strings.Contains(cmd, "&& cd /") || strings.Contains(cmd, "|| cd /") {
+			return "Command blocked by safety guard (root access attempt)"
 		}
 
-		pathPattern := regexp.MustCompile(`[A-Za-z]:\\[^\\\"']+|/[^\s\"']+`)
+		cwdPath, err := filepath.Abs(cwd)
+		if err != nil {
+			return "Internal error resolving working directory"
+		}
+
+		// Expand environment variables to see where they lead
+		expanded := os.ExpandEnv(cmd)
+
+		// Regex to find potential paths (heuristic)
+		pathPattern := regexp.MustCompile(`(?:[A-Za-z]:\\[^\\\"'\s]+|/[^\s\"']+|(?:\.\.[/\\])+[^\s\"']+)`)
 		matches := pathPattern.FindAllString(cmd, -1)
+		matches = append(matches, pathPattern.FindAllString(expanded, -1)...)
 
 		for _, raw := range matches {
-			p, err := filepath.Abs(raw)
+			// Skip single dashes or dot commands
+			if raw == "-" || raw == "." || raw == ".." {
+				continue
+			}
+
+			p := raw
+			if !filepath.IsAbs(p) {
+				p = filepath.Join(cwdPath, p)
+			}
+			
+			absPath, err := filepath.Abs(p)
 			if err != nil {
 				continue
 			}
 
-			rel, err := filepath.Rel(cwdPath, p)
+			// Normalize for comparison
+			rel, err := filepath.Rel(cwdPath, absPath)
 			if err != nil {
 				continue
 			}
 
 			if strings.HasPrefix(rel, "..") {
-				return "Command blocked by safety guard (path outside working dir)"
+				return fmt.Sprintf("Command blocked by safety guard (path %q is outside working dir)", raw)
 			}
 		}
 	}

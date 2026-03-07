@@ -59,6 +59,14 @@ func (si *SkillInstaller) InstallFromGitHub(ctx context.Context, repo string) (*
 		return nil, fmt.Errorf("skill '%s' already exists", skillName)
 	}
 
+	// Security: Verify trust for GitHub repositories
+	if !si.isTrustedRepo(repo) {
+		if os.Getenv("RDXCLAW_ALLOW_UNTRUSTED_SKILLS") != "true" {
+			return nil, fmt.Errorf("repository %s is not from a trusted organization. Set RDXCLAW_ALLOW_UNTRUSTED_SKILLS=true to install anyway.", repo)
+		}
+		slog.Warn("installing untrusted skill", "repo", repo)
+	}
+
 	// Try downloading as zip archive first (full package)
 	result, err := si.downloadRepoZip(ctx, repo, skillDir)
 	if err == nil {
@@ -215,6 +223,20 @@ func (si *SkillInstaller) ListBuiltinSkills() []BuiltinSkill {
 		}
 	}
 	return skills
+}
+
+func (si *SkillInstaller) isTrustedRepo(repo string) bool {
+	trustedOrgs := []string{"Sterlites", "rdxclaw"}
+	parts := strings.Split(repo, "/")
+	if len(parts) >= 1 {
+		org := parts[0]
+		for _, t := range trustedOrgs {
+			if strings.EqualFold(org, t) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // --- Internal helpers ---

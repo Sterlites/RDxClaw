@@ -21,15 +21,8 @@ func AuthMiddleware(apiKey string, next http.Handler) http.Handler {
 		}
 
 		if apiKey == "" {
-			// No API key configured — allow all requests
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		// Allow local Mission Control UI requests (referer from same host or localhost loopback for convenience)
-		// For a strict production setup, this would be tighter, but for the "out-of-box" GUI, we allow localhost.
-		if strings.HasPrefix(r.RemoteAddr, "127.0.0.1") || strings.HasPrefix(r.RemoteAddr, "[::1]") {
-			next.ServeHTTP(w, r)
+			// No API key configured — for security, block all non-public requests
+			writeError(w, http.StatusUnauthorized, "api_key_not_set", "API key is not configured on server. Please set RDXCLAW_API_KEY.")
 			return
 		}
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -321,6 +322,19 @@ func (t *WebFetchTool) Execute(ctx context.Context, args map[string]interface{})
 
 	if parsedURL.Host == "" {
 		return ErrorResult("missing domain in URL")
+	}
+
+	// SSRF Protection: Resolve and check IP addresses
+	host := parsedURL.Hostname()
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return ErrorResult(fmt.Sprintf("failed to resolve host %s: %v", host, err))
+	}
+
+	for _, ip := range ips {
+		if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsPrivate() {
+			return ErrorResult(fmt.Sprintf("access to private/internal IP address %s is blocked", ip.String()))
+		}
 	}
 
 	maxChars := t.maxChars
