@@ -24,9 +24,6 @@ import (
 //go:embed web/*
 var embeddedWebFS embed.FS
 
-// Server is the headless REST API server for RDxClaw.
-// It provides OpenAI-compatible endpoints, skill execution,
-// webhook handling, and agent status.
 type Server struct {
 	agentLoop *agent.AgentLoop
 	msgBus    *bus.MessageBus
@@ -36,6 +33,7 @@ type Server struct {
 	version   string
 	events    []ActivityEvent
 	eventsMu  sync.RWMutex
+	workspace string
 }
 
 // ServerConfig holds configuration for the API server.
@@ -48,11 +46,12 @@ type ServerConfig struct {
 }
 
 // NewServer creates a new API server instance.
-func NewServer(agentLoop *agent.AgentLoop, msgBus *bus.MessageBus, loader *skills.SkillsLoader, cfg ServerConfig) *Server {
+func NewServer(agentLoop *agent.AgentLoop, msgBus *bus.MessageBus, loader *skills.SkillsLoader, workspace string, cfg ServerConfig) *Server {
 	s := &Server{
 		agentLoop: agentLoop,
 		msgBus:    msgBus,
 		loader:    loader,
+		workspace: workspace,
 		config:    cfg,
 		startedAt: time.Now(),
 		version:   "1.0.0",
@@ -435,8 +434,8 @@ func (s *Server) handleKillAgent(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request) {
 	// Root directories to scan for relevant files
-	docsDirs := []string{"workspace", "workspace/memory"}
-	var items []FileListItem
+	docsDirs := []string{s.workspace, filepath.Join(s.workspace, "memory")}
+	var files []FileListItem
 
 	for _, dir := range docsDirs {
 		// Verify directory exists
@@ -450,7 +449,7 @@ func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request) {
 			}
 			if !info.IsDir() && filepath.Ext(path) == ".md" {
 				// We only care about .md files for this feature as requested
-				items = append(items, FileListItem{
+				files = append(files, FileListItem{
 					Name:    info.Name(),
 					Path:    path,
 					Size:    info.Size(),
@@ -465,8 +464,8 @@ func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"files": items,
-		"count": len(items),
+		"files": files,
+		"count": len(files),
 	})
 }
 
@@ -479,10 +478,21 @@ func (s *Server) handleGetFileContent(w http.ResponseWriter, r *http.Request) {
 
 	// Security: Ensure path is within the allowed directories
 	cleanPath := filepath.Clean(path)
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error", fmt.Sprintf("failed to get absolute path: %v", err))
+		return
+	}
+
 	allowed := false
-	docsDirs := []string{"workspace", "workspace/memory"}
+	docsDirs := []string{s.workspace, filepath.Join(s.workspace, "memory")}
 	for _, dir := range docsDirs {
-		if strings.HasPrefix(cleanPath, filepath.Clean(dir)) {
+		absDir, err := filepath.Abs(dir)
+		if err != nil {
+			slog.Warn("Error getting absolute path for docs directory", "dir", dir, "err", err)
+			continue
+		}
+		if strings.HasPrefix(absPath, absDir) {
 			allowed = true
 			break
 		}

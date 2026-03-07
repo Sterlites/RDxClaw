@@ -939,7 +939,7 @@ func serverCmd() {
 		CORSOrigins: cfg.API.CORSOrigins,
 	}
 
-	srv := api.NewServer(agentLoop, msgBus, skillsLoader, serverConfig)
+	srv := api.NewServer(agentLoop, msgBus, skillsLoader, workspace, serverConfig)
 
 	fmt.Printf("%s RDxClaw API Server v%s\n", logo, version)
 	fmt.Printf("✓ Listening on %s:%d\n", cfg.API.Host, cfg.API.Port)
