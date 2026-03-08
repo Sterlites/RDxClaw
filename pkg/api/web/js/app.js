@@ -234,7 +234,7 @@ async function loadStatus() {
             <span class="activity-source">[ ${ev.source} ]</span>
             <span class="activity-time">${time}</span>
           </div>
-          <div class="activity-msg">${ev.message.toUpperCase()}</div>
+          <div class="activity-msg">${ev.message}</div>
         </div>
       `;
       activityList.appendChild(item);
@@ -477,7 +477,7 @@ async function loadFileContent(path, el) {
   }
 
   currentlyEditingPath = path;
-  document.getElementById('currentFileName').innerText = data.name.toUpperCase();
+  document.getElementById('currentFileName').innerText = data.name;
   document.getElementById('fileContent').innerText = data.content;
   document.getElementById('fileEditor').value = data.content;
   document.getElementById('docsControls').style.display = 'flex';
@@ -581,7 +581,7 @@ function renderChat() {
         <span class="msg-role">${isAgent ? '[ AGENT_UPLINK ]' : '[ COMMANDER ]'}</span>
         <span class="msg-time">${time}${msg.telemetry ? ` // LATENCY: ${msg.telemetry}ms` : ''}</span>
       </div>
-      <div class="msg-bubble ${isLast && isAgent ? 'typing' : ''}">${escapeHTML(msg.content)}</div>
+      <div class="msg-bubble ${isLast && isAgent ? 'typing' : ''}">${msg.content}</div>
     `;
     container.appendChild(div);
   });

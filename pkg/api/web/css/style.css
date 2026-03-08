@@ -44,8 +44,8 @@
   font-family: 'Share Tech Mono', 'VT323', monospace;
   background-color: var(--matrix-black);
   color: var(--matrix-green);
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
+  /* text-transform: uppercase; -- Removed for better readability */
+  letter-spacing: 0.05em; /* Reduced from 0.15em */
   overflow: hidden;
   position: relative;
 }
@@ -120,10 +120,21 @@
 .matrix-theme h2, 
 .matrix-theme h3, 
 .matrix-theme label, 
-.matrix-theme span, 
-.matrix-theme button, 
-.matrix-theme div {
+.matrix-theme .nav-item,
+.matrix-theme .card-title,
+.matrix-theme th,
+.matrix-theme .sidebar-label,
+.matrix-theme button {
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
   text-shadow: 0 0 5px var(--matrix-glow);
+}
+
+.matrix-theme span, 
+.matrix-theme div,
+.matrix-theme p,
+.matrix-theme td {
+  text-shadow: 0 0 2px var(--matrix-glow);
 }
 
 * {
@@ -363,10 +374,12 @@ main {
 
 .matrix-theme .card-title {
   color: var(--matrix-dim);
-  font-family: 'VT323', monospace;
-  font-size: 1.2rem;
-  border-bottom: 1px solid rgba(0, 255, 65, 0.1);
-  padding-bottom: 10px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 1rem;
+  border-bottom: 1px solid rgba(0, 255, 65, 0.15);
+  padding-bottom: 12px;
+  letter-spacing: 0.15em;
+  font-weight: bold;
 }
 
 .matrix-theme .card-value {
@@ -443,11 +456,15 @@ main {
 }
 
 .matrix-theme th {
-  background: rgba(0, 59, 0, 0.3);
-  color: var(--matrix-green);
-  border-bottom: 1px solid var(--matrix-green);
-  font-family: 'VT323', monospace;
-  font-size: 1.1rem;
+  background: rgba(0, 59, 0, 0.4);
+  color: var(--matrix-lime);
+  border-bottom: 2px solid var(--matrix-green);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.9rem;
+  font-weight: bold;
+  letter-spacing: 0.15em;
+  padding: 12px 15px;
+  text-align: left;
 }
 
 .matrix-theme tr:hover td {
@@ -456,7 +473,27 @@ main {
 }
 
 .matrix-theme td {
-  border-bottom: 1px solid rgba(0, 255, 65, 0.1);
+  border-bottom: 1px solid rgba(0, 255, 65, 0.08);
+  padding: 18px 15px;
+  vertical-align: top;
+  line-height: 1.6;
+}
+
+.matrix-theme .skill-desc {
+  font-size: 0.85rem;
+  color: var(--matrix-white);
+  opacity: 0.7;
+  margin-top: 6px;
+  text-transform: none; /* Crucial for readability */
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+}
+
+.matrix-theme td strong {
+  color: var(--matrix-green);
+  font-size: 1.05rem;
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 5px var(--matrix-glow);
 }
 
 /* Scrollbar styling */
@@ -827,31 +864,29 @@ tr:hover td {
   color: var(--matrix-dim);
 }
 
-/* Badge variants */
+/* Badges consolidated */
 .matrix-theme .badge {
-  padding: 4px 8px;
-  border-radius: 0;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
+  display: inline-block;
+  padding: 4px 10px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  letter-spacing: 0.1em;
   border: 1px solid var(--matrix-dim);
+  color: var(--matrix-dim);
+  background: rgba(0, 59, 0, 0.2);
+  text-transform: uppercase;
 }
 
 .matrix-theme .badge-info {
-  background-color: rgba(0, 59, 0, 0.2);
+  border-color: var(--matrix-green);
   color: var(--matrix-green);
 }
 
 .matrix-theme .badge-success {
-  background-color: rgba(0, 255, 65, 0.1);
+  border-color: var(--matrix-lime);
   color: var(--matrix-lime);
-  border-color: var(--matrix-green);
-}
-
-.matrix-theme .skill-desc {
-  color: var(--matrix-dim);
-  font-size: 0.9rem;
-  margin-top: 8px;
+  background: rgba(0, 255, 65, 0.1);
+  box-shadow: 0 0 5px rgba(0, 255, 65, 0.2);
 }
 
 /* Loading animation */
