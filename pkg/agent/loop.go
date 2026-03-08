@@ -421,7 +421,7 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, opts processOptions) (str
 	// 6. Save final assistant message to session if it hasn't been saved yet.
 	// If the last message in history is already an assistant message with this content
 	// (e.g., saved with tool calls during runLLMIteration), don't duplicate it.
-	history := al.sessions.GetHistory(opts.SessionKey)
+	history = al.sessions.GetHistory(opts.SessionKey)
 	isDuplicate := false
 	if len(history) > 0 {
 		lastMsg := history[len(history)-1]
