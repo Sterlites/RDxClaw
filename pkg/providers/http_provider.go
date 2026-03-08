@@ -179,8 +179,18 @@ func (p *HTTPProvider) parseResponse(body []byte) (*LLMResponse, error) {
 		})
 	}
 
+	content := choice.Message.Content
+	// If no standard tool calls, try extracting from text (fallback for some models/providers)
+	if len(toolCalls) == 0 {
+		extracted := extractToolCallsFromText(content)
+		if len(extracted) > 0 {
+			toolCalls = extracted
+			content = stripToolCallsFromText(content)
+		}
+	}
+
 	return &LLMResponse{
-		Content:      choice.Message.Content,
+		Content:      content,
 		ToolCalls:    toolCalls,
 		FinishReason: choice.FinishReason,
 		Usage:        apiResponse.Usage,
