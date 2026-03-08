@@ -612,6 +612,8 @@ function renderChat() {
 }
 
 
+const SESSION_ID = 'mc-' + Date.now();
+
 async function sendMessage() {
   const inputEl = document.getElementById('chatInput');
   const text = inputEl.value.trim();
@@ -636,7 +638,7 @@ async function sendMessage() {
       body: JSON.stringify({
         messages: chatMessages.slice(-20), // Send last 20 messages for context
         channel: 'mission-control',
-        sessionKey: 'mc-' + Date.now()
+        sessionKey: SESSION_ID
       })
     });
 

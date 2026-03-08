@@ -271,7 +271,7 @@ func (al *AgentLoop) ProcessHeartbeat(ctx context.Context, content, channel, cha
 		Channel:         channel,
 		ChatID:          chatID,
 		UserMessage:     content,
-		DefaultResponse: "I've completed processing but have no response to give.",
+		DefaultResponse: "I've completed processing your request, but the model did not provide a textual response. This can happen if the task was strictly action-oriented and no final summary was generated.",
 		EnableSummary:   false,
 		SendResponse:    false,
 		NoHistory:       true, // Don't load session history for heartbeat
@@ -310,7 +310,7 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		Channel:         msg.Channel,
 		ChatID:          msg.ChatID,
 		UserMessage:     msg.Content,
-		DefaultResponse: "I've completed processing but have no response to give.",
+		DefaultResponse: "I've completed processing your request, but the model did not provide a textual response. This can happen if the task was strictly action-oriented and no final summary was generated.",
 		EnableSummary:   true,
 		SendResponse:    false,
 	})
@@ -623,14 +623,35 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 			return "", iteration, fmt.Errorf("LLM call failed after retries: %w", err)
 		}
 
+		// Keep the most recent non-empty content from the LLM.
+		// Some models provide a preamble ("I'll check that...") before tool calls.
+		// If the final turn is empty, we can fall back to this.
+		if response.Content != "" {
+			finalContent = response.Content
+		}
+
 		// Check if no tool calls - we're done
 		if len(response.ToolCalls) == 0 {
-			finalContent = response.Content
-			logger.InfoCF("agent", "LLM response without tool calls (direct answer)",
+			logger.InfoCF("agent", "LLM response without tool calls (turn complete)",
 				map[string]interface{}{
 					"iteration":     iteration,
 					"content_chars": len(finalContent),
 				})
+			break
+		}
+
+		// If we reached the last iteration and still have tool calls,
+		// we should notify the user or at least try to get a final answer.
+		if iteration == al.maxIterations {
+			logger.WarnCF("agent", "Reached maximum tool iterations",
+				map[string]interface{}{
+					"max": al.maxIterations,
+				})
+			if finalContent == "" {
+				finalContent = "I've reached the maximum number of iterations allowed for tool execution. I might be in an infinite loop or the task is too complex."
+			} else {
+				finalContent += "\n\n(Note: Maximum tool iterations reached. Some tasks may be incomplete.)"
+			}
 			break
 		}
 
