@@ -170,6 +170,7 @@ func (p *ClaudeCliProvider) parseClaudeCliResponse(output string) (*LLMResponse,
 		ToolCalls:    toolCalls,
 		FinishReason: finishReason,
 		Usage:        usage,
+		DurationMS:   resp.DurationMS,
 	}, nil
 }
 

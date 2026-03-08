@@ -48,6 +48,37 @@ type AgentLoop struct {
 	summarizing    sync.Map // Tracks which sessions are currently being summarized
 	channelManager *channels.Manager
 	swarmManager   *swarm.Manager
+
+	// Telemetry
+	telemetryMu    sync.RWMutex
+	lastLatency    *LatencyStats
+	sessionStats   map[string][]LatencyStats
+	overallTotal   LatencyStats
+	overallCount   int
+}
+
+type LatencyStats struct {
+	TotalMS        int64            `json:"total_ms"`
+	ContextBuildMS int64            `json:"context_build_ms"`
+	LLMCallsMS     int64            `json:"llm_calls_ms"`
+	ToolExecMS     int64            `json:"tool_exec_ms"`
+	IterationCount int              `json:"iteration_count"`
+	Turns          []IterationStats `json:"turns,omitempty"`
+	Timestamp      time.Time        `json:"timestamp"`
+}
+
+type IterationStats struct {
+	Iteration int   `json:"iteration"`
+	LLMMS     int64 `json:"llm_ms"`
+	ToolsMS   int64 `json:"tools_ms"`
+}
+
+type AverageStats struct {
+	TotalMS        float64 `json:"total_ms"`
+	ContextBuildMS float64 `json:"context_build_ms"`
+	LLMCallsMS     float64 `json:"llm_calls_ms"`
+	ToolExecMS     float64 `json:"tool_exec_ms"`
+	Count          int     `json:"count"`
 }
 
 // processOptions configures how a message is processed
@@ -170,6 +201,7 @@ func NewAgentLoop(cfg *config.Config, msgBus *bus.MessageBus, provider providers
 		tools:          toolsRegistry,
 		summarizing:    sync.Map{},
 		swarmManager:   swarmManager,
+		sessionStats:   make(map[string][]LatencyStats),
 	}
 }
 
@@ -233,6 +265,60 @@ func (al *AgentLoop) SetChannelManager(cm *channels.Manager) {
 
 func (al *AgentLoop) GetSwarmManager() *swarm.Manager {
 	return al.swarmManager
+}
+
+func (al *AgentLoop) recordTelemetry(sessionKey string, stats LatencyStats) {
+	al.telemetryMu.Lock()
+	defer al.telemetryMu.Unlock()
+
+	al.lastLatency = &stats
+	al.sessionStats[sessionKey] = append(al.sessionStats[sessionKey], stats)
+
+	al.overallTotal.TotalMS += stats.TotalMS
+	al.overallTotal.ContextBuildMS += stats.ContextBuildMS
+	al.overallTotal.LLMCallsMS += stats.LLMCallsMS
+	al.overallTotal.ToolExecMS += stats.ToolExecMS
+	al.overallCount++
+}
+
+func (al *AgentLoop) GetTelemetry(sessionKey string) (last *LatencyStats, sessAvg AverageStats, overallAvg AverageStats) {
+	al.telemetryMu.RLock()
+	defer al.telemetryMu.RUnlock()
+
+	last = al.lastLatency
+
+	// Session averages
+	if stats, ok := al.sessionStats[sessionKey]; ok && len(stats) > 0 {
+		var total LatencyStats
+		for _, s := range stats {
+			total.TotalMS += s.TotalMS
+			total.ContextBuildMS += s.ContextBuildMS
+			total.LLMCallsMS += s.LLMCallsMS
+			total.ToolExecMS += s.ToolExecMS
+		}
+		count := float64(len(stats))
+		sessAvg = AverageStats{
+			TotalMS:        float64(total.TotalMS) / count,
+			ContextBuildMS: float64(total.ContextBuildMS) / count,
+			LLMCallsMS:     float64(total.LLMCallsMS) / count,
+			ToolExecMS:     float64(total.ToolExecMS) / count,
+			Count:          len(stats),
+		}
+	}
+
+	// Overall averages
+	if al.overallCount > 0 {
+		count := float64(al.overallCount)
+		overallAvg = AverageStats{
+			TotalMS:        float64(al.overallTotal.TotalMS) / count,
+			ContextBuildMS: float64(al.overallTotal.ContextBuildMS) / count,
+			LLMCallsMS:     float64(al.overallTotal.LLMCallsMS) / count,
+			ToolExecMS:     float64(al.overallTotal.ToolExecMS) / count,
+			Count:          al.overallCount,
+		}
+	}
+
+	return
 }
 
 // RecordLastChannel records the last active channel for this workspace.
@@ -382,10 +468,15 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, opts processOptions) (str
 		}
 	}
 
-	// 1. Update tool contexts
+	// 0. Update tool contexts
 	al.updateToolContexts(opts.Channel, opts.ChatID)
 
-	// 2. Build messages (skip history for heartbeat)
+	start := time.Now()
+	var stats LatencyStats
+	stats.Timestamp = start
+
+	// 1. Build messages (skip history for heartbeat)
+	contextStart := time.Now()
 	var history []providers.Message
 	var summary string
 	if !opts.NoHistory {
@@ -400,27 +491,28 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, opts processOptions) (str
 		opts.Channel,
 		opts.ChatID,
 	)
+	stats.ContextBuildMS = time.Since(contextStart).Milliseconds()
 
-	// 3. Save user message to session
+	// 2. Save user message to session
 	al.sessions.AddMessage(opts.SessionKey, "user", opts.UserMessage)
 
-	// 4. Run LLM iteration loop
-	finalContent, iteration, err := al.runLLMIteration(ctx, messages, opts)
+	// 3. Run LLM iteration loop
+	finalContent, iteration, llmMS, toolMS, turns, err := al.runLLMIteration(ctx, messages, opts)
+	stats.IterationCount = iteration
+	stats.LLMCallsMS = llmMS
+	stats.ToolExecMS = toolMS
+	stats.Turns = turns
+
 	if err != nil {
 		return "", err
 	}
 
-	// If last tool had ForUser content and we already sent it, we might not need to send final response
-	// This is controlled by the tool's Silent flag and ForUser content
-
-	// 5. Handle empty response
+	// 4. Handle empty response
 	if finalContent == "" {
 		finalContent = opts.DefaultResponse
 	}
 
-	// 6. Save final assistant message to session if it hasn't been saved yet.
-	// If the last message in history is already an assistant message with this content
-	// (e.g., saved with tool calls during runLLMIteration), don't duplicate it.
+	// 5. Save final assistant message to session if it hasn't been saved yet.
 	history = al.sessions.GetHistory(opts.SessionKey)
 	isDuplicate := false
 	if len(history) > 0 {
@@ -435,12 +527,12 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, opts processOptions) (str
 	}
 	_ = al.sessions.Save(opts.SessionKey) // #nosec G104
 
-	// 7. Optional: summarization
+	// 6. Optional: summarization
 	if opts.EnableSummary {
 		al.maybeSummarize(opts.SessionKey, opts.Channel, opts.ChatID)
 	}
 
-	// 8. Optional: send response via bus
+	// 7. Optional: send response via bus
 	if opts.SendResponse {
 		al.bus.PublishOutbound(bus.OutboundMessage{
 			Channel: opts.Channel,
@@ -449,12 +541,22 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, opts processOptions) (str
 		})
 	}
 
+	stats.TotalMS = time.Since(start).Milliseconds()
+
+	// 8. Record Telemetry
+	if !opts.NoHistory {
+		al.recordTelemetry(opts.SessionKey, stats)
+	}
+
 	// 9. Log response
 	responsePreview := utils.Truncate(finalContent, 120)
 	logger.InfoCF("agent", fmt.Sprintf("Response: %s", responsePreview),
 		map[string]interface{}{
 			"session_key":  opts.SessionKey,
 			"iterations":   iteration,
+			"total_ms":     stats.TotalMS,
+			"llm_ms":       stats.LLMCallsMS,
+			"tool_ms":      stats.ToolExecMS,
 			"final_length": len(finalContent),
 		})
 
@@ -462,10 +564,13 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, opts processOptions) (str
 }
 
 // runLLMIteration executes the LLM call loop with tool handling.
-// Returns the final content, iteration count, and any error.
-func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.Message, opts processOptions) (string, int, error) {
+// Returns the final content, iteration count, LLM time, tool time, turn stats, and any error.
+func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.Message, opts processOptions) (string, int, int64, int64, []IterationStats, error) {
 	iteration := 0
 	var finalContent string
+	var llmTotalMS int64
+	var toolTotalMS int64
+	var turns []IterationStats
 
 	for iteration < al.maxIterations {
 		iteration++
@@ -502,6 +607,7 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 		var response *providers.LLMResponse
 		var err error
 
+		llmStart := time.Now()
 		// Retry loop for context/token errors
 		maxRetries := 2
 		for retry := 0; retry <= maxRetries; retry++ {
@@ -633,8 +739,11 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 					"iteration": iteration,
 					"error":     err.Error(),
 				})
-			return "", iteration, fmt.Errorf("LLM call failed after retries: %w", err)
+			return "", iteration, llmTotalMS, toolTotalMS, turns, fmt.Errorf("LLM call failed after retries: %w", err)
 		}
+
+		llmDur := time.Since(llmStart).Milliseconds()
+		llmTotalMS += llmDur
 
 		// Keep the most recent non-empty content from the LLM.
 		// Some models provide a preamble ("I'll check that...") before tool calls.
@@ -650,6 +759,10 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 					"iteration":     iteration,
 					"content_chars": len(finalContent),
 				})
+			turns = append(turns, IterationStats{
+				Iteration: iteration,
+				LLMMS:     llmDur,
+			})
 			break
 		}
 
@@ -665,6 +778,10 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 			} else {
 				finalContent += "\n\n(Note: Maximum tool iterations reached. Some tasks may be incomplete.)"
 			}
+			turns = append(turns, IterationStats{
+				Iteration: iteration,
+				LLMMS:     llmDur,
+			})
 			break
 		}
 
@@ -702,6 +819,7 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 		al.sessions.AddFullMessage(opts.SessionKey, assistantMsg)
 
 		// Execute tool calls
+		var turnToolMS int64
 		for _, tc := range response.ToolCalls {
 			// Log tool call with arguments preview
 			argsJSON, _ := json.Marshal(tc.Arguments)
@@ -728,7 +846,11 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 				}
 			}
 
+			toolStart := time.Now()
 			toolResult := al.tools.ExecuteWithContext(ctx, tc.Name, tc.Arguments, opts.Channel, opts.ChatID, asyncCallback)
+			toolDur := time.Since(toolStart).Milliseconds()
+			turnToolMS += toolDur
+			toolTotalMS += toolDur
 
 			// Send ForUser content to user immediately if not Silent
 			if !toolResult.Silent && toolResult.ForUser != "" && opts.SendResponse {
@@ -760,6 +882,12 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 			// Save tool result message to session
 			al.sessions.AddFullMessage(opts.SessionKey, toolResultMsg)
 		}
+
+		turns = append(turns, IterationStats{
+			Iteration: iteration,
+			LLMMS:     llmDur,
+			ToolsMS:   turnToolMS,
+		})
 	}
 
 	// 4.5 If the loop completed but we have no final text content,
@@ -793,7 +921,7 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 		}
 	}
 
-	return finalContent, iteration, nil
+	return finalContent, iteration, llmTotalMS, toolTotalMS, turns, nil
 }
 
 // updateToolContexts updates the context for tools that need channel/chatID info.

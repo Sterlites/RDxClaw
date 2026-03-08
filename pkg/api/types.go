@@ -1,6 +1,9 @@
 package api
 
-import "time"
+import (
+	"time"
+	"github.com/Sterlites/RDxClaw/pkg/agent"
+)
 
 // --- OpenAI-Compatible Chat Completion Types ---
 
@@ -88,6 +91,13 @@ type StatusResponse struct {
 	Cron         map[string]interface{} `json:"cron,omitempty"`
 	System       SystemStats     `json:"system"`
 	Workspace    WorkspaceStats  `json:"workspace"`
+	Telemetry    *TelemetryInfo  `json:"telemetry,omitempty"`
+}
+
+type TelemetryInfo struct {
+	LastResponse    *agent.LatencyStats `json:"last_response,omitempty"`
+	SessionAverages agent.AverageStats  `json:"session_averages"`
+	OverallAverages agent.AverageStats  `json:"overall_averages"`
 }
 
 // SystemStats contains Go runtime statistics.

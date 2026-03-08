@@ -322,9 +322,107 @@ main {
 /* Cards & Layout */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 24px;
   margin-bottom: 24px;
+}
+
+.full-width {
+  grid-column: 1 / -1;
+}
+
+.latency-grid {
+  display: flex;
+  justify-content: space-around;
+  margin-top: 20px;
+  gap: 20px;
+}
+
+.latency-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 15px;
+    background: rgba(0, 50, 0, 0.2);
+    border-left: 2px solid var(--matrix-dim);
+}
+
+.latency-label {
+    font-size: 0.75rem;
+    color: var(--matrix-dim);
+    margin-bottom: 8px;
+    letter-spacing: 0.1em;
+}
+
+.latency-main-value {
+    font-size: 2.5rem;
+    color: var(--matrix-lime);
+    font-weight: bold;
+    text-shadow: 0 0 15px var(--matrix-glow);
+    margin-bottom: 4px;
+}
+
+.latency-meta-info {
+    font-size: 0.7rem;
+    color: var(--matrix-dim);
+    margin-bottom: 20px;
+    letter-spacing: 0.05em;
+    font-style: italic;
+}
+
+.latency-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.breakdown-item {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: var(--matrix-white);
+    opacity: 0.8;
+}
+
+.breakdown-item span:first-child {
+    color: var(--matrix-dim);
+}
+
+.latency-visualizer {
+    margin-top: 25px;
+    height: 60px;
+    width: 100%;
+    background: rgba(0, 20, 0, 0.3);
+    border: 1px dashed var(--matrix-dim);
+    display: flex;
+    align-items: center;
+    padding: 0 15px;
+    overflow: hidden;
+    position: relative;
+}
+
+.bar-segment {
+    height: 25px;
+    transition: width 0.5s ease-in-out;
+    position: relative;
+}
+
+.bar-context { background: var(--matrix-dim); }
+.bar-llm { background: var(--matrix-green); box-shadow: 0 0 10px var(--matrix-green); }
+.bar-tools { background: var(--matrix-lime); box-shadow: 0 0 15px var(--matrix-lime); }
+
+.bar-segment::after {
+    content: attr(data-label);
+    position: absolute;
+    top: -20px;
+    left: 0;
+    font-size: 0.65rem;
+    color: var(--matrix-dim);
+    white-space: nowrap;
+}
+
+.latency-card:hover .latency-group {
+    border-left-color: var(--matrix-lime);
+    background: rgba(0, 70, 0, 0.3);
 }
 
 .matrix-theme .card {

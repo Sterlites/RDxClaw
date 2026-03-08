@@ -194,7 +194,7 @@ async function fetchJSON(endpoint, options = {}) {
 }
 
 async function loadStatus() {
-  const data = await fetchJSON('/status');
+  const data = await fetchJSON(`/status?session_key=${SESSION_ID}`);
   if (!data) return;
 
   // Real-time Clock
@@ -237,10 +237,9 @@ async function loadStatus() {
     updateVal('storageVal', data.workspace.size || '0 KB');
   }
 
-
   // Render Activity Feed
   const activityList = document.getElementById('activityList');
-  if (data.recent_events && data.recent_events.length > 0) {
+  if (activityList && data.recent_events && data.recent_events.length > 0) {
     activityList.innerHTML = '';
     data.recent_events.forEach(ev => {
       const item = document.createElement('div');
@@ -262,6 +261,73 @@ async function loadStatus() {
       activityList.appendChild(item);
     });
   }
+  if (data.telemetry) {
+    const tel = data.telemetry;
+    
+    // Last Response
+    if (tel.last_response) {
+      updateVal('lastTotalLatency', tel.last_response.total_ms + 'ms');
+      updateVal('lastContext', tel.last_response.context_build_ms + 'ms');
+      updateVal('lastLLM', tel.last_response.llm_calls_ms + 'ms');
+      updateVal('lastTools', tel.last_response.tool_exec_ms + 'ms');
+      
+      const iterEl = document.getElementById('lastIterations');
+      if (iterEl) iterEl.innerText = `ITERATIONS: ${tel.last_response.iteration_count} turns`;
+
+      renderLatencyVisualizer(tel.last_response);
+    }
+    
+    // Session Averages
+    if (tel.session_averages && tel.session_averages.count > 0) {
+      updateVal('sessTotalLatency', Math.round(tel.session_averages.total_ms) + 'ms');
+      updateVal('sessContext', Math.round(tel.session_averages.context_build_ms) + 'ms');
+      updateVal('sessLLM', Math.round(tel.session_averages.llm_calls_ms) + 'ms');
+      updateVal('sessTools', Math.round(tel.session_averages.tool_exec_ms) + 'ms');
+    }
+    
+    // Global Averages
+    if (tel.overall_averages && tel.overall_averages.count > 0) {
+      updateVal('globalTotalLatency', Math.round(tel.overall_averages.total_ms) + 'ms');
+      updateVal('globalContext', Math.round(tel.overall_averages.context_build_ms) + 'ms');
+      updateVal('globalLLM', Math.round(tel.overall_averages.llm_calls_ms) + 'ms');
+      updateVal('globalTools', Math.round(tel.overall_averages.tool_exec_ms) + 'ms');
+    }
+  }
+}
+
+function renderLatencyVisualizer(stats) {
+    const container = document.getElementById('latencyVisualizer');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    const total = Math.max(stats.total_ms, 1);
+    const pContext = (stats.context_build_ms / total) * 100;
+    const pLLM = (stats.llm_calls_ms / total) * 100;
+    const pTools = (stats.tool_exec_ms / total) * 100;
+    
+    if (pContext > 0) {
+        const bar = document.createElement('div');
+        bar.className = 'bar-segment bar-context';
+        bar.style.width = `${pContext}%`;
+        bar.dataset.label = `BUILD: ${stats.context_build_ms}ms`;
+        container.appendChild(bar);
+    }
+    
+    if (pLLM > 0) {
+        const bar = document.createElement('div');
+        bar.className = 'bar-segment bar-llm';
+        bar.style.width = `${pLLM}%`;
+        bar.dataset.label = `LLM: ${stats.llm_calls_ms}ms`;
+        container.appendChild(bar);
+    }
+    
+    if (pTools > 0) {
+        const bar = document.createElement('div');
+        bar.className = 'bar-segment bar-tools';
+        bar.style.width = `${pTools}%`;
+        bar.dataset.label = `TOOLS: ${stats.tool_exec_ms}ms`;
+        container.appendChild(bar);
+    }
 }
 
 

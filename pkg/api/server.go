@@ -365,6 +365,10 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	memUsage := fmt.Sprintf("%.2f MB", float64(m.Alloc)/1024/1024)
 	numThreads, _ := runtime.ThreadCreateProfile(nil)
 
+	// Get Telemetry
+	sessionKey := r.URL.Query().Get("session_key")
+	last, sessAvg, overallAvg := s.agentLoop.GetTelemetry(sessionKey)
+
 	writeJSON(w, http.StatusOK, StatusResponse{
 		Status:    "ok",
 		Version:   s.version,
@@ -389,6 +393,11 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 			HeapObjects: m.HeapObjects,
 		},
 		Workspace: s.getWorkspaceStats(),
+		Telemetry: &TelemetryInfo{
+			LastResponse:    last,
+			SessionAverages: sessAvg,
+			OverallAverages: overallAvg,
+		},
 	})
 }
 
