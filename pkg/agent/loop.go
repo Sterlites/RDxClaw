@@ -554,7 +554,8 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, opts processOptions) (str
 
 	// 4. Handle empty response
 	respStart := time.Now()
-	if finalContent == "" {
+	// If iteration > 0, we might have already sent intermediate responses
+	if finalContent == "" && iteration == 0 {
 		finalContent = opts.DefaultResponse
 	}
 
@@ -562,13 +563,19 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, opts processOptions) (str
 	history = al.sessions.GetHistory(opts.SessionKey)
 	isDuplicate := false
 	if len(history) > 0 {
-		lastMsg := history[len(history)-1]
-		if lastMsg.Role == "assistant" && lastMsg.Content == finalContent {
-			isDuplicate = true
+		// Look for the last assistant message in history to check for duplication
+		// Note: The history might end with a tool message, so we check the last assistant entry
+		for i := len(history) - 1; i >= 0; i-- {
+			if history[i].Role == "assistant" {
+				if history[i].Content == finalContent {
+					isDuplicate = true
+				}
+				break
+			}
 		}
 	}
 
-	if !isDuplicate {
+	if !isDuplicate && finalContent != "" {
 		al.sessions.AddMessage(opts.SessionKey, "assistant", finalContent)
 	}
 	_ = al.sessions.Save(opts.SessionKey) // #nosec G104
@@ -579,7 +586,8 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, opts processOptions) (str
 	}
 
 	// 7. Optional: send response via bus
-	if opts.SendResponse {
+	// Only send if it's not a duplicate of what was already sent or saved
+	if opts.SendResponse && !isDuplicate && finalContent != "" {
 		al.bus.PublishOutbound(bus.OutboundMessage{
 			Channel: opts.Channel,
 			ChatID:  opts.ChatID,
@@ -618,6 +626,8 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 	var llmTotalMS int64
 	var toolTotalMS int64
 	var turns []IterationStats
+	var lastTurnHadContent bool
+	var lastPublishedContent string
 
 	for iteration < al.maxIterations {
 		iteration++
@@ -723,47 +733,6 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 				// So GetHistory ALREADY contains the user message!
 
 				// CORRECTION:
-				// BuildMessages combines: [System] + [History] + [CurrentMessage]
-				// But Step 3 added CurrentMessage to History.
-				// So if we use GetHistory now, it has the user message.
-				// If we pass opts.UserMessage to BuildMessages, it adds it AGAIN.
-
-				// For retry in the middle of a loop, we should rely on what's in the session.
-				// BUT checking BuildMessages implementation:
-				// It appends history... then appends currentMessage.
-
-				// Logic fix for retry:
-				// If iteration == 1, opts.UserMessage corresponds to the user input.
-				// If iteration > 1, we are processing tool results. The "messages" passed to Chat
-				// already accumulated tool outputs.
-				// Rebuilding from session history is safest because it persists state.
-				// Start fresh with rebuilt history.
-
-				// Special case: standard BuildMessages appends "currentMessage".
-				// If we are strictly retrying the *LLM call*, we want the exact same state as before but compressed.
-				// However, the "messages" argument passed to runLLMIteration is constructed by the caller.
-				// If we rebuild from Session, we need to know if "currentMessage" should be appended or is already in history.
-
-				// In runAgentLoop:
-				// 3. sessions.AddMessage(userMsg)
-				// 4. runLLMIteration(..., UserMessage)
-
-				// So History contains the user message.
-				// BuildMessages typically appends the user message as a *new* pending message.
-				// Wait, standard BuildMessages usage in runAgentLoop:
-				// messages := BuildMessages(history (has old), UserMessage)
-				// THEN AddMessage(UserMessage).
-				// So "history" passed to BuildMessages does NOT contain the current UserMessage yet.
-
-				// But here, inside the loop, we have already saved it.
-				// So GetHistory() includes the current user message.
-				// If we call BuildMessages(GetHistory(), UserMessage), we get duplicates.
-
-				// Hack/Fix:
-				// If we are retrying, we rebuild from Session History ONLY.
-				// We pass empty string as "currentMessage" to BuildMessages
-				// because the "current message" is already saved in history (step 3).
-
 				messages = al.contextBuilder.BuildMessages(
 					newHistory,
 					newSummary,
@@ -792,11 +761,22 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 		llmDur := time.Since(llmStart).Milliseconds()
 		llmTotalMS += llmDur
 
-		// Keep the most recent non-empty content from the LLM.
-		// Some models provide a preamble ("I'll check that...") before tool calls.
-		// If the final turn is empty, we can fall back to this.
-		if response.Content != "" {
+		// Update turn content status and final content tracking
+		lastTurnHadContent = response.Content != ""
+		if lastTurnHadContent {
 			finalContent = response.Content
+
+			// SoTA AGENT BEHAVIOR: Send intermediate thoughts/preamble immediately if opts.SendResponse is true.
+			// This provides instant feedback to the user that the agent is working and thinking.
+			if len(response.ToolCalls) > 0 && opts.SendResponse && !constants.IsInternalChannel(opts.Channel) {
+				al.bus.PublishOutbound(bus.OutboundMessage{
+					Channel: opts.Channel,
+					ChatID:  opts.ChatID,
+					Content: response.Content,
+				})
+				lastPublishedContent = response.Content
+				logger.DebugCF("agent", "Sent intermediate thought to user", map[string]interface{}{"content_len": len(response.Content)})
+			}
 		}
 
 		// Check if no tool calls - we're done
@@ -940,11 +920,12 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 		})
 	}
 
-	// 4.5 If the loop completed but we have no final text content,
+	// 4.5 ROBUST SUMMARY FALLBACK:
+	// If the loop completed but the LAST turn provided no new text content,
 	// and we performed at least one tool iteration, force one last turn
-	// to get a summary of the tool results for the user.
-	if finalContent == "" && iteration > 0 {
-		logger.InfoCF("agent", "Model provided no summary after tool loop, forcing one final summary turn",
+	// to get a final answer/summary for the user regardless of what earlier turns said.
+	if !lastTurnHadContent && iteration > 0 {
+		logger.InfoCF("agent", "Model provided no summary in the final turn of a tool loop, forcing one final summary turn",
 			map[string]interface{}{
 				"iteration": iteration,
 			})
