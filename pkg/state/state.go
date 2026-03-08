@@ -12,6 +12,13 @@ import (
 
 // State represents the persistent state for a workspace.
 // It includes information about the last active channel/chat.
+type State struct {
+	// LastChannel is the last channel used for communication
+	LastChannel string `json:"last_channel,omitempty"`
+
+	// LastChatID is the last chat ID used for communication
+	LastChatID string `json:"last_chat_id,omitempty"`
+
 	// Timestamp is the last time this state was updated
 	Timestamp time.Time `json:"timestamp"`
 
