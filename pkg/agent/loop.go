@@ -58,27 +58,32 @@ type AgentLoop struct {
 }
 
 type LatencyStats struct {
-	TotalMS        int64            `json:"total_ms"`
-	ContextBuildMS int64            `json:"context_build_ms"`
-	LLMCallsMS     int64            `json:"llm_calls_ms"`
-	ToolExecMS     int64            `json:"tool_exec_ms"`
-	IterationCount int              `json:"iteration_count"`
-	Turns          []IterationStats `json:"turns,omitempty"`
-	Timestamp      time.Time        `json:"timestamp"`
+	TotalMS           int64            `json:"total_ms"`
+	StartupMS         int64            `json:"startup_ms"`
+	ContextBuildMS    int64            `json:"context_build_ms"`
+	LLMCallsMS        int64            `json:"llm_calls_ms"`
+	ToolExecMS        int64            `json:"tool_exec_ms"`
+	ResponsePrepareMS int64            `json:"response_prepare_ms"`
+	IterationCount    int              `json:"iteration_count"`
+	Turns             []IterationStats `json:"turns,omitempty"`
+	Timestamp         time.Time        `json:"timestamp"`
 }
 
 type IterationStats struct {
-	Iteration int   `json:"iteration"`
-	LLMMS     int64 `json:"llm_ms"`
-	ToolsMS   int64 `json:"tools_ms"`
+	Iteration          int   `json:"iteration"`
+	LLMMS              int64 `json:"llm_ms"`
+	ToolsMS            int64 `json:"tools_ms"`
+	ProviderDurationMS int64 `json:"provider_duration_ms"`
 }
 
 type AverageStats struct {
-	TotalMS        float64 `json:"total_ms"`
-	ContextBuildMS float64 `json:"context_build_ms"`
-	LLMCallsMS     float64 `json:"llm_calls_ms"`
-	ToolExecMS     float64 `json:"tool_exec_ms"`
-	Count          int     `json:"count"`
+	TotalMS           float64 `json:"total_ms"`
+	StartupMS         float64 `json:"startup_ms"`
+	ContextBuildMS    float64 `json:"context_build_ms"`
+	LLMCallsMS        float64 `json:"llm_calls_ms"`
+	ToolExecMS        float64 `json:"tool_exec_ms"`
+	ResponsePrepareMS float64 `json:"response_prepare_ms"`
+	Count             int     `json:"count"`
 }
 
 // processOptions configures how a message is processed
@@ -275,9 +280,11 @@ func (al *AgentLoop) recordTelemetry(sessionKey string, stats LatencyStats) {
 	al.sessionStats[sessionKey] = append(al.sessionStats[sessionKey], stats)
 
 	al.overallTotal.TotalMS += stats.TotalMS
+	al.overallTotal.StartupMS += stats.StartupMS
 	al.overallTotal.ContextBuildMS += stats.ContextBuildMS
 	al.overallTotal.LLMCallsMS += stats.LLMCallsMS
 	al.overallTotal.ToolExecMS += stats.ToolExecMS
+	al.overallTotal.ResponsePrepareMS += stats.ResponsePrepareMS
 	al.overallCount++
 }
 
@@ -292,17 +299,21 @@ func (al *AgentLoop) GetTelemetry(sessionKey string) (last *LatencyStats, sessAv
 		var total LatencyStats
 		for _, s := range stats {
 			total.TotalMS += s.TotalMS
+			total.StartupMS += s.StartupMS
 			total.ContextBuildMS += s.ContextBuildMS
 			total.LLMCallsMS += s.LLMCallsMS
 			total.ToolExecMS += s.ToolExecMS
+			total.ResponsePrepareMS += s.ResponsePrepareMS
 		}
 		count := float64(len(stats))
 		sessAvg = AverageStats{
-			TotalMS:        float64(total.TotalMS) / count,
-			ContextBuildMS: float64(total.ContextBuildMS) / count,
-			LLMCallsMS:     float64(total.LLMCallsMS) / count,
-			ToolExecMS:     float64(total.ToolExecMS) / count,
-			Count:          len(stats),
+			TotalMS:           float64(total.TotalMS) / count,
+			StartupMS:         float64(total.StartupMS) / count,
+			ContextBuildMS:    float64(total.ContextBuildMS) / count,
+			LLMCallsMS:        float64(total.LLMCallsMS) / count,
+			ToolExecMS:        float64(total.ToolExecMS) / count,
+			ResponsePrepareMS: float64(total.ResponsePrepareMS) / count,
+			Count:             len(stats),
 		}
 	}
 
@@ -310,11 +321,13 @@ func (al *AgentLoop) GetTelemetry(sessionKey string) (last *LatencyStats, sessAv
 	if al.overallCount > 0 {
 		count := float64(al.overallCount)
 		overallAvg = AverageStats{
-			TotalMS:        float64(al.overallTotal.TotalMS) / count,
-			ContextBuildMS: float64(al.overallTotal.ContextBuildMS) / count,
-			LLMCallsMS:     float64(al.overallTotal.LLMCallsMS) / count,
-			ToolExecMS:     float64(al.overallTotal.ToolExecMS) / count,
-			Count:          al.overallCount,
+			TotalMS:           float64(al.overallTotal.TotalMS) / count,
+			StartupMS:         float64(al.overallTotal.StartupMS) / count,
+			ContextBuildMS:    float64(al.overallTotal.ContextBuildMS) / count,
+			LLMCallsMS:        float64(al.overallTotal.LLMCallsMS) / count,
+			ToolExecMS:        float64(al.overallTotal.ToolExecMS) / count,
+			ResponsePrepareMS: float64(al.overallTotal.ResponsePrepareMS) / count,
+			Count:             al.overallCount,
 		}
 	}
 
@@ -468,12 +481,13 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, opts processOptions) (str
 		}
 	}
 
-	// 0. Update tool contexts
-	al.updateToolContexts(opts.Channel, opts.ChatID)
-
 	start := time.Now()
 	var stats LatencyStats
 	stats.Timestamp = start
+
+	// 0. Update tool contexts
+	al.updateToolContexts(opts.Channel, opts.ChatID)
+	stats.StartupMS = time.Since(start).Milliseconds()
 
 	// 1. Build messages (skip history for heartbeat)
 	contextStart := time.Now()
@@ -508,6 +522,7 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, opts processOptions) (str
 	}
 
 	// 4. Handle empty response
+	respStart := time.Now()
 	if finalContent == "" {
 		finalContent = opts.DefaultResponse
 	}
@@ -541,6 +556,7 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, opts processOptions) (str
 		})
 	}
 
+	stats.ResponsePrepareMS = time.Since(respStart).Milliseconds()
 	stats.TotalMS = time.Since(start).Milliseconds()
 
 	// 8. Record Telemetry
@@ -760,8 +776,9 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 					"content_chars": len(finalContent),
 				})
 			turns = append(turns, IterationStats{
-				Iteration: iteration,
-				LLMMS:     llmDur,
+				Iteration:          iteration,
+				LLMMS:              llmDur,
+				ProviderDurationMS: int64(response.DurationMS),
 			})
 			break
 		}
@@ -779,8 +796,9 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 				finalContent += "\n\n(Note: Maximum tool iterations reached. Some tasks may be incomplete.)"
 			}
 			turns = append(turns, IterationStats{
-				Iteration: iteration,
-				LLMMS:     llmDur,
+				Iteration:          iteration,
+				LLMMS:              llmDur,
+				ProviderDurationMS: int64(response.DurationMS),
 			})
 			break
 		}
@@ -884,9 +902,10 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 		}
 
 		turns = append(turns, IterationStats{
-			Iteration: iteration,
-			LLMMS:     llmDur,
-			ToolsMS:   turnToolMS,
+			Iteration:          iteration,
+			LLMMS:              llmDur,
+			ToolsMS:            turnToolMS,
+			ProviderDurationMS: int64(response.DurationMS),
 		})
 	}
 

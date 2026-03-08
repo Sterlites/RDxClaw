@@ -380,9 +380,17 @@ main {
 .breakdown-item {
     display: flex;
     justify-content: space-between;
-    font-size: 0.85rem;
+    font-size: 0.75rem;
     color: var(--matrix-white);
-    opacity: 0.8;
+    opacity: 0.7;
+    font-family: 'Share Tech Mono', monospace;
+    border-bottom: 1px dashed rgba(0, 255, 65, 0.05);
+    padding: 2px 0;
+}
+
+.breakdown-item span:last-child {
+    font-weight: bold;
+    color: var(--matrix-lime);
 }
 
 .breakdown-item span:first-child {
@@ -408,18 +416,34 @@ main {
     position: relative;
 }
 
-.bar-context { background: var(--matrix-dim); }
-.bar-llm { background: var(--matrix-green); box-shadow: 0 0 10px var(--matrix-green); }
-.bar-tools { background: var(--matrix-lime); box-shadow: 0 0 15px var(--matrix-lime); }
+.bar-startup { background: #4a4a4a; }
+.bar-context { background: #00841f; }
+.bar-llm { background: #00ff41; box-shadow: 0 0 15px #00ff41; }
+.bar-tools { background: #39ff14; box-shadow: 0 0 20px #39ff14; }
+.bar-prep { background: #003b00; }
 
 .bar-segment::after {
     content: attr(data-label);
     position: absolute;
-    top: -20px;
-    left: 0;
-    font-size: 0.65rem;
-    color: var(--matrix-dim);
+    top: -24px;
+    left: 2px;
+    font-size: 0.55rem;
+    color: var(--matrix-white);
+    background: rgba(0,0,0,0.8);
+    padding: 1px 4px;
+    border: 1px solid var(--matrix-dim);
     white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+}
+
+.bar-segment:hover::after {
+    opacity: 1;
+}
+
+.latency-visualizer:hover .bar-segment::after {
+    opacity: 1; /* Show all on container hover for better visibility */
 }
 
 .latency-card:hover .latency-group {

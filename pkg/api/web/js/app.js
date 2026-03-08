@@ -211,6 +211,12 @@ async function loadStatus() {
     if (el) el.innerHTML = `<span class="matrix-white">${val}</span>`;
   };
 
+  const formatDuration = (ms) => {
+    if (ms === undefined || ms === null) return '--';
+    if (ms < 1000) return `${ms}ms`;
+    return `${(ms / 1000).toFixed(2)}s`;
+  };
+
   updateVal('uptimeVal', data.uptime || '00:00:00');
   updateVal('versionVal', data.version || 'v1.0.0');
   
@@ -261,15 +267,18 @@ async function loadStatus() {
       activityList.appendChild(item);
     });
   }
+  // Latency Telemetry
   if (data.telemetry) {
     const tel = data.telemetry;
     
     // Last Response
     if (tel.last_response) {
-      updateVal('lastTotalLatency', tel.last_response.total_ms + 'ms');
-      updateVal('lastContext', tel.last_response.context_build_ms + 'ms');
-      updateVal('lastLLM', tel.last_response.llm_calls_ms + 'ms');
-      updateVal('lastTools', tel.last_response.tool_exec_ms + 'ms');
+      updateVal('lastTotalLatency', formatDuration(tel.last_response.total_ms));
+      updateVal('lastStartup', formatDuration(tel.last_response.startup_ms));
+      updateVal('lastContext', formatDuration(tel.last_response.context_build_ms));
+      updateVal('lastLLM', formatDuration(tel.last_response.llm_calls_ms));
+      updateVal('lastTools', formatDuration(tel.last_response.tool_exec_ms));
+      updateVal('lastPrep', formatDuration(tel.last_response.response_prepare_ms));
       
       const iterEl = document.getElementById('lastIterations');
       if (iterEl) iterEl.innerText = `ITERATIONS: ${tel.last_response.iteration_count} turns`;
@@ -279,18 +288,22 @@ async function loadStatus() {
     
     // Session Averages
     if (tel.session_averages && tel.session_averages.count > 0) {
-      updateVal('sessTotalLatency', Math.round(tel.session_averages.total_ms) + 'ms');
-      updateVal('sessContext', Math.round(tel.session_averages.context_build_ms) + 'ms');
-      updateVal('sessLLM', Math.round(tel.session_averages.llm_calls_ms) + 'ms');
-      updateVal('sessTools', Math.round(tel.session_averages.tool_exec_ms) + 'ms');
+      updateVal('sessTotalLatency', formatDuration(Math.round(tel.session_averages.total_ms)));
+      updateVal('sessStartup', formatDuration(Math.round(tel.session_averages.startup_ms)));
+      updateVal('sessContext', formatDuration(Math.round(tel.session_averages.context_build_ms)));
+      updateVal('sessLLM', formatDuration(Math.round(tel.session_averages.llm_calls_ms)));
+      updateVal('sessTools', formatDuration(Math.round(tel.session_averages.tool_exec_ms)));
+      updateVal('sessPrep', formatDuration(Math.round(tel.session_averages.response_prepare_ms)));
     }
     
     // Global Averages
     if (tel.overall_averages && tel.overall_averages.count > 0) {
-      updateVal('globalTotalLatency', Math.round(tel.overall_averages.total_ms) + 'ms');
-      updateVal('globalContext', Math.round(tel.overall_averages.context_build_ms) + 'ms');
-      updateVal('globalLLM', Math.round(tel.overall_averages.llm_calls_ms) + 'ms');
-      updateVal('globalTools', Math.round(tel.overall_averages.tool_exec_ms) + 'ms');
+      updateVal('globalTotalLatency', formatDuration(Math.round(tel.overall_averages.total_ms)));
+      updateVal('globalStartup', formatDuration(Math.round(tel.overall_averages.startup_ms)));
+      updateVal('globalContext', formatDuration(Math.round(tel.overall_averages.context_build_ms)));
+      updateVal('globalLLM', formatDuration(Math.round(tel.overall_averages.llm_calls_ms)));
+      updateVal('globalTools', formatDuration(Math.round(tel.overall_averages.tool_exec_ms)));
+      updateVal('globalPrep', formatDuration(Math.round(tel.overall_averages.response_prepare_ms)));
     }
   }
 }
@@ -301,33 +314,26 @@ function renderLatencyVisualizer(stats) {
     container.innerHTML = '';
     
     const total = Math.max(stats.total_ms, 1);
+    const pStartup = (stats.startup_ms / total) * 100;
     const pContext = (stats.context_build_ms / total) * 100;
     const pLLM = (stats.llm_calls_ms / total) * 100;
     const pTools = (stats.tool_exec_ms / total) * 100;
+    const pPrep = (stats.response_prepare_ms / total) * 100;
     
-    if (pContext > 0) {
+    const addSegment = (p, label, colorClass) => {
+        if (p <= 0.1) return; // Ignore tiny segments
         const bar = document.createElement('div');
-        bar.className = 'bar-segment bar-context';
-        bar.style.width = `${pContext}%`;
-        bar.dataset.label = `BUILD: ${stats.context_build_ms}ms`;
+        bar.className = `bar-segment ${colorClass}`;
+        bar.style.width = `${p}%`;
+        bar.dataset.label = label;
         container.appendChild(bar);
-    }
-    
-    if (pLLM > 0) {
-        const bar = document.createElement('div');
-        bar.className = 'bar-segment bar-llm';
-        bar.style.width = `${pLLM}%`;
-        bar.dataset.label = `LLM: ${stats.llm_calls_ms}ms`;
-        container.appendChild(bar);
-    }
-    
-    if (pTools > 0) {
-        const bar = document.createElement('div');
-        bar.className = 'bar-segment bar-tools';
-        bar.style.width = `${pTools}%`;
-        bar.dataset.label = `TOOLS: ${stats.tool_exec_ms}ms`;
-        container.appendChild(bar);
-    }
+    };
+
+    addSegment(pStartup, `START: ${stats.startup_ms}ms`, 'bar-startup');
+    addSegment(pContext, `CTX: ${stats.context_build_ms}ms`, 'bar-context');
+    addSegment(pLLM, `LLM: ${stats.llm_calls_ms}ms`, 'bar-llm');
+    addSegment(pTools, `TOOLS: ${stats.tool_exec_ms}ms`, 'bar-tools');
+    addSegment(pPrep, `PREP: ${stats.response_prepare_ms}ms`, 'bar-prep');
 }
 
 
