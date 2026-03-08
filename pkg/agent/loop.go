@@ -193,7 +193,7 @@ func NewAgentLoop(cfg *config.Config, msgBus *bus.MessageBus, provider providers
 	contextBuilder := NewContextBuilder(workspace)
 	contextBuilder.SetToolsRegistry(toolsRegistry)
 
-	return &AgentLoop{
+	al := &AgentLoop{
 		bus:            msgBus,
 		provider:       provider,
 		workspace:      workspace,
@@ -208,6 +208,20 @@ func NewAgentLoop(cfg *config.Config, msgBus *bus.MessageBus, provider providers
 		swarmManager:   swarmManager,
 		sessionStats:   make(map[string][]LatencyStats),
 	}
+
+	// Load long-term averages from persistent state
+	global := stateManager.GetGlobalTelemetry()
+	al.overallTotal = LatencyStats{
+		TotalMS:           global.TotalMS,
+		StartupMS:         global.StartupMS,
+		ContextBuildMS:    global.ContextBuildMS,
+		LLMCallsMS:        global.LLMCallsMS,
+		ToolExecMS:        global.ToolExecMS,
+		ResponsePrepareMS: global.ResponsePrepareMS,
+	}
+	al.overallCount = global.Count
+
+	return al
 }
 
 func (al *AgentLoop) Run(ctx context.Context) error {
@@ -286,6 +300,16 @@ func (al *AgentLoop) recordTelemetry(sessionKey string, stats LatencyStats) {
 	al.overallTotal.ToolExecMS += stats.ToolExecMS
 	al.overallTotal.ResponsePrepareMS += stats.ResponsePrepareMS
 	al.overallCount++
+
+	// Atomic persistence for cross-restart data
+	go func() {
+		if err := al.state.UpdateGlobalTelemetry(
+			stats.TotalMS, stats.StartupMS, stats.ContextBuildMS,
+			stats.LLMCallsMS, stats.ToolExecMS, stats.ResponsePrepareMS,
+		); err != nil {
+			logger.WarnCF("agent", "Failed to persist telemetry: %v", map[string]interface{}{"error": err.Error()})
+		}
+	}()
 }
 
 func (al *AgentLoop) GetTelemetry(sessionKey string) (last *LatencyStats, sessAvg AverageStats, overallAvg AverageStats) {

@@ -12,15 +12,21 @@ import (
 
 // State represents the persistent state for a workspace.
 // It includes information about the last active channel/chat.
-type State struct {
-	// LastChannel is the last channel used for communication
-	LastChannel string `json:"last_channel,omitempty"`
-
-	// LastChatID is the last chat ID used for communication
-	LastChatID string `json:"last_chat_id,omitempty"`
-
 	// Timestamp is the last time this state was updated
 	Timestamp time.Time `json:"timestamp"`
+
+	// Telemetry stores global latency totals for long-term averages
+	Telemetry GlobalTelemetry `json:"telemetry,omitempty"`
+}
+
+type GlobalTelemetry struct {
+	TotalMS           int64 `json:"total_ms"`
+	StartupMS         int64 `json:"startup_ms"`
+	ContextBuildMS    int64 `json:"context_build_ms"`
+	LLMCallsMS        int64 `json:"llm_calls_ms"`
+	ToolExecMS        int64 `json:"tool_exec_ms"`
+	ResponsePrepareMS int64 `json:"response_prepare_ms"`
+	Count             int   `json:"count"`
 }
 
 // Manager manages persistent state with atomic saves.
@@ -127,6 +133,30 @@ func (sm *Manager) GetTimestamp() time.Time {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
 	return sm.state.Timestamp
+}
+
+// UpdateGlobalTelemetry updates the global telemetry stats and saves.
+func (sm *Manager) UpdateGlobalTelemetry(totalMS, startupMS, contextMS, llmMS, toolMS, prepMS int64) error {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	sm.state.Telemetry.TotalMS += totalMS
+	sm.state.Telemetry.StartupMS += startupMS
+	sm.state.Telemetry.ContextBuildMS += contextMS
+	sm.state.Telemetry.LLMCallsMS += llmMS
+	sm.state.Telemetry.ToolExecMS += toolMS
+	sm.state.Telemetry.ResponsePrepareMS += prepMS
+	sm.state.Telemetry.Count++
+	sm.state.Timestamp = time.Now()
+
+	return sm.saveAtomic()
+}
+
+// GetGlobalTelemetry returns the persistent global telemetry stats.
+func (sm *Manager) GetGlobalTelemetry() GlobalTelemetry {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	return sm.state.Telemetry
 }
 
 // saveAtomic performs an atomic save using temp file + rename.
