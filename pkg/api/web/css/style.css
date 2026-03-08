@@ -57,7 +57,7 @@
   width: 100%;
   height: 100%;
   z-index: 0;
-  opacity: 0.25; /* Even higher for a "good" effect as requested */
+  opacity: 0.4; /* Increased visibility to show through semi-transparent terminal */
   pointer-events: none;
   animation: crt-flicker 0.15s infinite;
 }
@@ -328,7 +328,7 @@ main {
 }
 
 .matrix-theme .card {
-  background: rgba(0, 10, 0, 0.9);
+  background: rgba(0, 10, 0, 0.75); /* Made cards also slightly transparent for a cohesive look */
   border: 1px solid rgba(0, 255, 65, 0.3);
   border-radius: 0;
   padding: 24px;
@@ -616,6 +616,14 @@ tr:hover td {
   border-bottom-left-radius: 0;
 }
 
+.matrix-theme .terminal {
+  background-color: rgba(0, 5, 0, 0.5); /* More transparent for better background visibility */
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-color: var(--matrix-green);
+  box-shadow: 0 0 40px rgba(0, 255, 65, 0.1);
+}
+
 .matrix-theme .msg-bubble {
   line-height: 1.6;
   font-size: 1rem;
@@ -625,7 +633,9 @@ tr:hover td {
 
 .matrix-theme .terminal-input {
   flex-direction: column; /* Stack for more width */
-  background: var(--matrix-black);
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   border-top: 1px solid var(--matrix-green);
   padding: 20px;
 }
