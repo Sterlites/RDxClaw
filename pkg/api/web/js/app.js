@@ -356,7 +356,10 @@ async function executeSkill(skillName) {
     const res = await fetch(`${API_BASE}/skills/${skillName}/execute`, {
       method: 'POST',
       headers: headers,
-      body: JSON.stringify({ input: input })
+      body: JSON.stringify({ 
+        input: input,
+        session_key: SESSION_ID
+      })
     });
 
     if (res.status === 401) {
@@ -638,7 +641,7 @@ async function sendMessage() {
       body: JSON.stringify({
         messages: chatMessages.slice(-20), // Send last 20 messages for context
         channel: 'mission-control',
-        sessionKey: SESSION_ID
+        session_key: SESSION_ID
       })
     });
 
