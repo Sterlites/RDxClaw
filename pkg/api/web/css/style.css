@@ -321,9 +321,11 @@ main {
 
 /* Cards & Layout */
 .grid {
-  display: grid;
-  gap: 24px;
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)) !important;
+  gap: 24px !important;
   margin-bottom: 24px;
+  width: 100%;
 }
 
 .full-width {
