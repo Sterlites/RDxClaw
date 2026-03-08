@@ -762,6 +762,37 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 		}
 	}
 
+	// 4.5 If the loop completed but we have no final text content,
+	// and we performed at least one tool iteration, force one last turn
+	// to get a summary of the tool results for the user.
+	if finalContent == "" && iteration > 0 {
+		logger.InfoCF("agent", "Model provided no summary after tool loop, forcing one final summary turn",
+			map[string]interface{}{
+				"iteration": iteration,
+			})
+
+		// Add a guiding message to the context for this turn only.
+		// We don't save this to history as it's a systemic nudge.
+		summaryMessages := make([]providers.Message, len(messages))
+		copy(summaryMessages, messages)
+
+		summaryMessages = append(summaryMessages, providers.Message{
+			Role:    "system",
+			Content: "Task complete. Based on the tool results above, please provide a final concise answer/summary to the user's initial request. Do not call any more tools.",
+		})
+
+		resp, err := al.provider.Chat(ctx, summaryMessages, nil, al.model, map[string]interface{}{
+			"max_tokens":  2048,
+			"temperature": 0.3, // Lower temperature for more stable summary
+		})
+		if err == nil && resp != nil && resp.Content != "" {
+			finalContent = resp.Content
+			logger.InfoCF("agent", "Successfully recovered final summary for user", nil)
+		} else if err != nil {
+			logger.WarnCF("agent", "Final summary turn failed", map[string]interface{}{"error": err.Error()})
+		}
+	}
+
 	return finalContent, iteration, nil
 }
 
