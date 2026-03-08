@@ -206,6 +206,11 @@ func (t *ExecTool) guardCommand(command, cwd string) string {
 			}
 
 			p := raw
+			// Exception for /dev/null
+			if p == "/dev/null" || p == "NUL" {
+				continue
+			}
+
 			if !filepath.IsAbs(p) {
 				p = filepath.Join(cwdPath, p)
 			}

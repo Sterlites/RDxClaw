@@ -782,7 +782,7 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 			logger.InfoCF("agent", "LLM response without tool calls (turn complete)",
 				map[string]interface{}{
 					"iteration":     iteration,
-					"content_chars": len(finalContent),
+					"content_chars": len(response.Content),
 				})
 			turns = append(turns, IterationStats{
 				Iteration:          iteration,
@@ -922,10 +922,13 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 	// If the loop completed but the LAST turn provided no new text content,
 	// and we performed at least one tool iteration, force one last turn
 	// to get a final answer/summary for the user regardless of what earlier turns said.
-	if !lastTurnHadContent && iteration > 0 {
-		logger.InfoCF("agent", "Model provided no summary in the final turn of a tool loop, forcing one final summary turn",
+	// We also trigger this if finalContent exists but looks like a preamble (e.g., ends with ":" or "following:").
+	isPreamble := finalContent != "" && (strings.HasSuffix(strings.TrimSpace(finalContent), ":") || strings.HasSuffix(strings.TrimSpace(finalContent), "following"))
+	if (!lastTurnHadContent || isPreamble) && iteration > 0 {
+		logger.InfoCF("agent", "Model provided no summary (or only a preamble) in the final turn of a tool loop, forcing one final summary turn",
 			map[string]interface{}{
-				"iteration": iteration,
+				"iteration":   iteration,
+				"is_preamble": isPreamble,
 			})
 
 		// Add a guiding message to the context for this turn only.
@@ -933,17 +936,27 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 		summaryMessages := make([]providers.Message, len(messages))
 		copy(summaryMessages, messages)
 
+		nudge := "Task complete. You have performed the necessary actions and received tool results above. Please provide a FINAL COMPREHENSIVE ANSWER or SUMMARY of these results to the user. Do not call any more tools."
+		if isPreamble {
+			nudge = fmt.Sprintf("You previously provided a preamble: %q. Now, please COMPLETE it by providing the actual results or a summary of the tool outputs above. Do not call any more tools.", utils.Truncate(finalContent, 100))
+		}
+
 		summaryMessages = append(summaryMessages, providers.Message{
 			Role:    "system",
-			Content: "Task complete. Based on the tool results above, please provide a final concise answer/summary to the user's initial request. Do not call any more tools.",
+			Content: nudge,
 		})
 
 		resp, err := al.provider.Chat(ctx, summaryMessages, nil, al.model, map[string]interface{}{
-			"max_tokens":  2048,
-			"temperature": 0.3, // Lower temperature for more stable summary
+			"max_tokens":  4096, // Allow longer summary
+			"temperature": 0.3,  // Lower temperature for more stable summary
 		})
 		if err == nil && resp != nil && resp.Content != "" {
-			finalContent = resp.Content
+			if isPreamble {
+				// If it's a preamble, try to append correctly
+				finalContent = strings.TrimSpace(finalContent) + "\n\n" + strings.TrimSpace(resp.Content)
+			} else {
+				finalContent = resp.Content
+			}
 			logger.InfoCF("agent", "Successfully recovered final summary for user", nil)
 		} else if err != nil {
 			logger.WarnCF("agent", "Final summary turn failed", map[string]interface{}{"error": err.Error()})
