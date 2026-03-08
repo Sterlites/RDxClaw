@@ -26,6 +26,7 @@ type GlobalTelemetry struct {
 	LLMCallsMS        int64 `json:"llm_calls_ms"`
 	ToolExecMS        int64 `json:"tool_exec_ms"`
 	ResponsePrepareMS int64 `json:"response_prepare_ms"`
+	IterationCount    int64 `json:"iteration_count"`
 	Count             int   `json:"count"`
 }
 
@@ -136,7 +137,7 @@ func (sm *Manager) GetTimestamp() time.Time {
 }
 
 // UpdateGlobalTelemetry updates the global telemetry stats and saves.
-func (sm *Manager) UpdateGlobalTelemetry(totalMS, startupMS, contextMS, llmMS, toolMS, prepMS int64) error {
+func (sm *Manager) UpdateGlobalTelemetry(totalMS, startupMS, contextMS, llmMS, toolMS, prepMS int64, iterations int) error {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
@@ -146,6 +147,7 @@ func (sm *Manager) UpdateGlobalTelemetry(totalMS, startupMS, contextMS, llmMS, t
 	sm.state.Telemetry.LLMCallsMS += llmMS
 	sm.state.Telemetry.ToolExecMS += toolMS
 	sm.state.Telemetry.ResponsePrepareMS += prepMS
+	sm.state.Telemetry.IterationCount += int64(iterations)
 	sm.state.Telemetry.Count++
 	sm.state.Timestamp = time.Now()
 

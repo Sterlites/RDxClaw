@@ -83,6 +83,7 @@ type AverageStats struct {
 	LLMCallsMS        float64 `json:"llm_calls_ms"`
 	ToolExecMS        float64 `json:"tool_exec_ms"`
 	ResponsePrepareMS float64 `json:"response_prepare_ms"`
+	AverageIterations float64 `json:"average_iterations"`
 	Count             int     `json:"count"`
 }
 
@@ -218,6 +219,7 @@ func NewAgentLoop(cfg *config.Config, msgBus *bus.MessageBus, provider providers
 		LLMCallsMS:        global.LLMCallsMS,
 		ToolExecMS:        global.ToolExecMS,
 		ResponsePrepareMS: global.ResponsePrepareMS,
+		IterationCount:    int(global.IterationCount),
 	}
 	al.overallCount = global.Count
 
@@ -299,6 +301,7 @@ func (al *AgentLoop) recordTelemetry(sessionKey string, stats LatencyStats) {
 	al.overallTotal.LLMCallsMS += stats.LLMCallsMS
 	al.overallTotal.ToolExecMS += stats.ToolExecMS
 	al.overallTotal.ResponsePrepareMS += stats.ResponsePrepareMS
+	al.overallTotal.IterationCount += stats.IterationCount
 	al.overallCount++
 
 	// Atomic persistence for cross-restart data
@@ -306,6 +309,7 @@ func (al *AgentLoop) recordTelemetry(sessionKey string, stats LatencyStats) {
 		if err := al.state.UpdateGlobalTelemetry(
 			stats.TotalMS, stats.StartupMS, stats.ContextBuildMS,
 			stats.LLMCallsMS, stats.ToolExecMS, stats.ResponsePrepareMS,
+			stats.IterationCount,
 		); err != nil {
 			logger.WarnCF("agent", "Failed to persist telemetry: %v", map[string]interface{}{"error": err.Error()})
 		}
@@ -328,6 +332,7 @@ func (al *AgentLoop) GetTelemetry(sessionKey string) (last *LatencyStats, sessAv
 			total.LLMCallsMS += s.LLMCallsMS
 			total.ToolExecMS += s.ToolExecMS
 			total.ResponsePrepareMS += s.ResponsePrepareMS
+			total.IterationCount += s.IterationCount
 		}
 		count := float64(len(stats))
 		sessAvg = AverageStats{
@@ -337,6 +342,7 @@ func (al *AgentLoop) GetTelemetry(sessionKey string) (last *LatencyStats, sessAv
 			LLMCallsMS:        float64(total.LLMCallsMS) / count,
 			ToolExecMS:        float64(total.ToolExecMS) / count,
 			ResponsePrepareMS: float64(total.ResponsePrepareMS) / count,
+			AverageIterations: float64(total.IterationCount) / count,
 			Count:             len(stats),
 		}
 	}
@@ -351,6 +357,7 @@ func (al *AgentLoop) GetTelemetry(sessionKey string) (last *LatencyStats, sessAv
 			LLMCallsMS:        float64(al.overallTotal.LLMCallsMS) / count,
 			ToolExecMS:        float64(al.overallTotal.ToolExecMS) / count,
 			ResponsePrepareMS: float64(al.overallTotal.ResponsePrepareMS) / count,
+			AverageIterations: float64(al.overallTotal.IterationCount) / count,
 			Count:             al.overallCount,
 		}
 	}

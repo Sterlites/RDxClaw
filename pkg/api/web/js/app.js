@@ -274,21 +274,20 @@ async function loadStatus() {
     // Last Response
     if (tel.last_response) {
       updateVal('lastTotalLatency', formatDuration(tel.last_response.total_ms));
+      updateVal('lastTurns', tel.last_response.iteration_count);
       updateVal('lastStartup', formatDuration(tel.last_response.startup_ms));
       updateVal('lastContext', formatDuration(tel.last_response.context_build_ms));
       updateVal('lastLLM', formatDuration(tel.last_response.llm_calls_ms));
       updateVal('lastTools', formatDuration(tel.last_response.tool_exec_ms));
       updateVal('lastPrep', formatDuration(tel.last_response.response_prepare_ms));
       
-      const iterEl = document.getElementById('lastIterations');
-      if (iterEl) iterEl.innerText = `ITERATIONS: ${tel.last_response.iteration_count} turns`;
-
       renderLatencyVisualizer(tel.last_response);
     }
     
     // Session Averages
     if (tel.session_averages && tel.session_averages.count > 0) {
       updateVal('sessTotalLatency', formatDuration(Math.round(tel.session_averages.total_ms)));
+      updateVal('sessTurns', tel.session_averages.average_iterations.toFixed(1));
       updateVal('sessStartup', formatDuration(Math.round(tel.session_averages.startup_ms)));
       updateVal('sessContext', formatDuration(Math.round(tel.session_averages.context_build_ms)));
       updateVal('sessLLM', formatDuration(Math.round(tel.session_averages.llm_calls_ms)));
@@ -299,6 +298,7 @@ async function loadStatus() {
     // Global Averages
     if (tel.overall_averages && tel.overall_averages.count > 0) {
       updateVal('globalTotalLatency', formatDuration(Math.round(tel.overall_averages.total_ms)));
+      updateVal('globalTurns', tel.overall_averages.average_iterations.toFixed(1));
       updateVal('globalStartup', formatDuration(Math.round(tel.overall_averages.startup_ms)));
       updateVal('globalContext', formatDuration(Math.round(tel.overall_averages.context_build_ms)));
       updateVal('globalLLM', formatDuration(Math.round(tel.overall_averages.llm_calls_ms)));
