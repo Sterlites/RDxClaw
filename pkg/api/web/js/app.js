@@ -8,8 +8,30 @@ function setApiKey(key) {
   loadStatus();
 }
 
-function showAuth() {
-  document.getElementById('authOverlay').classList.add('active');
+function showAuth(isManual = false) {
+  const overlay = document.getElementById('authOverlay');
+  const title = document.getElementById('authTitle');
+  const desc = document.getElementById('authDesc');
+  const closeBtn = document.getElementById('closeAuthBtn');
+  const submitBtn = document.getElementById('saveKeyBtn');
+  const input = document.getElementById('apiKeyInput');
+
+  if (isManual) {
+    title.innerText = 'UPLINK_CONFIG';
+    title.dataset.text = 'UPLINK_CONFIG';
+    desc.innerText = 'Modify API authentication settings for Mission Control.';
+    closeBtn.style.display = 'block';
+    submitBtn.innerText = 'SYNC_CREDENTIALS';
+    input.value = API_KEY;
+  } else {
+    title.innerText = 'ACCESS_RESTRICTED';
+    title.dataset.text = 'ACCESS_RESTRICTED';
+    desc.innerText = 'Mission Control requires a valid API Key to establish uplink.';
+    closeBtn.style.display = 'none';
+    submitBtn.innerText = 'ESTABLISH_UPLINK';
+  }
+
+  overlay.classList.add('active');
 }
 
 // --- Matrix Rain Canvas ---
@@ -120,9 +142,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (val) setApiKey(val);
   };
   
-  document.getElementById('authBtn').onclick = () => {
-    const val = prompt("Enter new API KEY (leave empty to clear):", API_KEY);
-    if (val !== null) setApiKey(val);
+  document.getElementById('authBtn').onclick = () => showAuth(true);
+  document.getElementById('closeAuthBtn').onclick = () => {
+    document.getElementById('authOverlay').classList.remove('active');
   };
 
   // Poll every 3 seconds

@@ -254,15 +254,19 @@
     </div>
   </main>
 
-  <!-- Auth Overlay -->
+  <!-- Auth Overlay / Settings -->
   <div id="authOverlay" class="overlay">
     <div class="overlay-content">
-      <div class="glitch-text" data-text="ACCESS_RESTRICTED">ACCESS_RESTRICTED</div>
-      <p>Mission Control requires a valid API Key to establish uplink.</p>
+      <button id="closeAuthBtn" class="btn-matrix btn-danger" style="position: absolute; top: 15px; right: 20px; display: none;">X_CLOSE</button>
+      <div class="glitch-text" id="authTitle" data-text="ACCESS_RESTRICTED">ACCESS_RESTRICTED</div>
+      <p id="authDesc">Mission Control requires a valid API Key to establish uplink.</p>
+      
       <div class="auth-input-group">
-        <input type="password" id="apiKeyInput" placeholder="ENTER_API_KEY..." autocomplete="off">
+        <label style="color: var(--matrix-dim); font-size: 0.8rem; letter-spacing: 0.2em;">SYSTEM_API_KEY_INPUT</label>
+        <input type="password" id="apiKeyInput" placeholder="ENTER_KEY_HERE..." autocomplete="off">
         <button id="saveKeyBtn">ESTABLISH_UPLINK</button>
       </div>
+      
       <p class="auth-hint">Check your server configuration or <code>RDXCLAW_API_KEY</code> env var.</p>
     </div>
   </div>
