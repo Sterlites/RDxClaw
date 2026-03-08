@@ -627,7 +627,6 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 	var toolTotalMS int64
 	var turns []IterationStats
 	var lastTurnHadContent bool
-	var lastPublishedContent string
 
 	for iteration < al.maxIterations {
 		iteration++
@@ -774,7 +773,6 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 					ChatID:  opts.ChatID,
 					Content: response.Content,
 				})
-				lastPublishedContent = response.Content
 				logger.DebugCF("agent", "Sent intermediate thought to user", map[string]interface{}{"content_len": len(response.Content)})
 			}
 		}
