@@ -123,7 +123,7 @@ func createToolRegistry(workspace string, restrict bool, cfg *config.Config, msg
 	}); searchTool != nil {
 		registry.Register(searchTool)
 	}
-	registry.Register(tools.NewWebFetchTool(50000))
+	registry.Register(tools.NewWebFetchTool(10000))
 
 	// Hardware tools (I2C, SPI) - Linux only, returns error on other platforms
 	registry.Register(tools.NewI2CTool())
@@ -777,38 +777,35 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 			}
 		}
 
-		// Check if no tool calls - we're done
+		// Check if no tool calls
 		if len(response.ToolCalls) == 0 {
-			logger.InfoCF("agent", "LLM response without tool calls (turn complete)",
-				map[string]interface{}{
-					"iteration":     iteration,
-					"content_chars": len(response.Content),
-				})
-			turns = append(turns, IterationStats{
-				Iteration:          iteration,
-				LLMMS:              llmDur,
-				ProviderDurationMS: int64(response.DurationMS),
-			})
-			break
-		}
+			// Check for preamble or empty response
+			preamble := isPreamble(response.Content)
+			
+			if (response.Content == "" || preamble) && iteration < al.maxIterations {
+				logger.InfoCF("agent", "Model provided no summary (or only a preamble), nudging to continue",
+					map[string]interface{}{
+						"iteration":   iteration,
+						"is_preamble": preamble,
+					})
 
-		// If we reached the last iteration and still have tool calls,
-		// we should notify the user or at least try to get a final answer.
-		if iteration == al.maxIterations {
-			logger.WarnCF("agent", "Reached maximum tool iterations",
-				map[string]interface{}{
-					"max": al.maxIterations,
+				nudge := "Task in progress. Based on the tool results above, please provide a COMPREHENSIVE report/summary of your findings to the user. Do not simply say you will continue; provide the results now."
+				if preamble {
+					nudge = fmt.Sprintf("You provided a preamble: %q. Now, please COMPLETE it by providing the actual results/data from the tools above. Do not call more tools unless absolutely necessary for the user's request.", utils.Truncate(response.Content, 100))
+				}
+
+				messages = append(messages, providers.Message{
+					Role:    "system",
+					Content: nudge,
 				})
-			if finalContent == "" {
-				finalContent = "I've reached the maximum number of iterations allowed for tool execution. I might be in an infinite loop or the task is too complex."
-			} else {
-				finalContent += "\n\n(Note: Maximum tool iterations reached. Some tasks may be incomplete.)"
+				
+				// We don't break, we let the loop continue to the next iteration
+				// which will call the LLM again with the new nudge.
+				lastTurnHadContent = false // Force another turn if possible
+				continue
 			}
-			turns = append(turns, IterationStats{
-				Iteration:          iteration,
-				LLMMS:              llmDur,
-				ProviderDurationMS: int64(response.DurationMS),
-			})
+			
+			// Truly done
 			break
 		}
 
@@ -918,52 +915,57 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 		})
 	}
 
-	// 4.5 ROBUST SUMMARY FALLBACK:
-	// If the loop completed but the LAST turn provided no new text content,
-	// and we performed at least one tool iteration, force one last turn
-	// to get a final answer/summary for the user regardless of what earlier turns said.
-	// We also trigger this if finalContent exists but looks like a preamble (e.g., ends with ":" or "following:").
-	isPreamble := finalContent != "" && (strings.HasSuffix(strings.TrimSpace(finalContent), ":") || strings.HasSuffix(strings.TrimSpace(finalContent), "following"))
-	if (!lastTurnHadContent || isPreamble) && iteration > 0 {
-		logger.InfoCF("agent", "Model provided no summary (or only a preamble) in the final turn of a tool loop, forcing one final summary turn",
-			map[string]interface{}{
-				"iteration":   iteration,
-				"is_preamble": isPreamble,
-			})
-
-		// Add a guiding message to the context for this turn only.
-		// We don't save this to history as it's a systemic nudge.
-		summaryMessages := make([]providers.Message, len(messages))
-		copy(summaryMessages, messages)
-
-		nudge := "Task complete. You have performed the necessary actions and received tool results above. Please provide a FINAL COMPREHENSIVE ANSWER or SUMMARY of these results to the user. Do not call any more tools."
-		if isPreamble {
-			nudge = fmt.Sprintf("You previously provided a preamble: %q. Now, please COMPLETE it by providing the actual results or a summary of the tool outputs above. Do not call any more tools.", utils.Truncate(finalContent, 100))
-		}
-
-		summaryMessages = append(summaryMessages, providers.Message{
-			Role:    "system",
-			Content: nudge,
+	// Truly done
+	logger.InfoCF("agent", "LLM loop complete (no tool calls)",
+		map[string]interface{}{
+			"iteration":     iteration,
+			"content_chars": len(response.Content),
 		})
+	turns = append(turns, IterationStats{
+		Iteration:          iteration,
+		LLMMS:              llmDur,
+		ProviderDurationMS: int64(response.DurationMS),
+	})
 
-		resp, err := al.provider.Chat(ctx, summaryMessages, nil, al.model, map[string]interface{}{
-			"max_tokens":  4096, // Allow longer summary
-			"temperature": 0.3,  // Lower temperature for more stable summary
-		})
-		if err == nil && resp != nil && resp.Content != "" {
-			if isPreamble {
-				// If it's a preamble, try to append correctly
-				finalContent = strings.TrimSpace(finalContent) + "\n\n" + strings.TrimSpace(resp.Content)
-			} else {
-				finalContent = resp.Content
+	return finalContent, iteration, llmTotalMS, toolTotalMS, turns, nil
+}
+
+func isPreamble(content string) bool {
+	if content == "" {
+		return false
+	}
+	trimmed := strings.TrimSpace(strings.ToLower(content))
+	
+	// Suffix-based triggers
+	if strings.HasSuffix(trimmed, ":") || 
+	   strings.HasSuffix(trimmed, "following") || 
+	   strings.HasSuffix(trimmed, "follows") ||
+	   strings.HasSuffix(trimmed, "below") ||
+	   strings.HasSuffix(trimmed, "tasks") {
+		return true
+	}
+
+	// Phrase-based triggers (common in stalling models)
+	stallPhrases := []string{
+		"let me continue",
+		"i will now",
+		"i will then",
+		"next i will",
+		"the following tools",
+		"starting the task",
+		"comprehensive task",
+	}
+	
+	for _, phrase := range stallPhrases {
+		if strings.Contains(trimmed, phrase) {
+			// Check if it's very short (likely just a preamble)
+			if len(trimmed) < 200 {
+				return true
 			}
-			logger.InfoCF("agent", "Successfully recovered final summary for user", nil)
-		} else if err != nil {
-			logger.WarnCF("agent", "Final summary turn failed", map[string]interface{}{"error": err.Error()})
 		}
 	}
 
-	return finalContent, iteration, llmTotalMS, toolTotalMS, turns, nil
+	return false
 }
 
 // updateToolContexts updates the context for tools that need channel/chatID info.
