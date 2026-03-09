@@ -724,7 +724,10 @@ async function sendMessage() {
     const data = await res.json();
     
     const duration = Date.now() - startTime;
-    if (data.choices && data.choices.length > 0) {
+    if (!res.ok) {
+      const errMsg = (data.error && data.error.message) ? data.error.message : `HTTP error ${res.status}`;
+      chatMessages.push({ role: 'assistant', content: `Error: ${errMsg}`, timestamp: new Date() });
+    } else if (data.choices && data.choices.length > 0) {
       const assistantMsg = data.choices[0].message;
       assistantMsg.timestamp = new Date();
       assistantMsg.telemetry = duration;
@@ -733,7 +736,7 @@ async function sendMessage() {
       chatMessages.push({ role: 'assistant', content: 'Error: Cannot communicate with brain.', timestamp: new Date() });
     }
   } catch (err) {
-    chatMessages.push({ role: 'assistant', content: 'Connection failed.' });
+    chatMessages.push({ role: 'assistant', content: `Connection failed: ${err.message}` });
   }
 
   loader.classList.remove('active');

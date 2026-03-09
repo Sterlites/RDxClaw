@@ -627,6 +627,8 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 	var toolTotalMS int64
 	var turns []IterationStats
 	var lastTurnHadContent bool
+	var response *providers.LLMResponse
+	var llmDur int64
 
 	for iteration < al.maxIterations {
 		iteration++
@@ -660,7 +662,6 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 				"tools_json":    formatToolsForLog(providerToolDefs),
 			})
 
-		var response *providers.LLMResponse
 		var err error
 
 		llmStart := time.Now()
@@ -757,7 +758,7 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 			return "", iteration, llmTotalMS, toolTotalMS, turns, fmt.Errorf("LLM call failed after retries: %w", err)
 		}
 
-		llmDur := time.Since(llmStart).Milliseconds()
+		llmDur = time.Since(llmStart).Milliseconds()
 		llmTotalMS += llmDur
 
 		// Update turn content status and final content tracking
