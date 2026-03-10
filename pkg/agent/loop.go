@@ -730,10 +730,13 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 		llmStart := time.Now()
 		maxRetries := 3 // Attempts beyond the first try
 		for retry := 0; retry <= maxRetries; retry++ {
+			// Call LLM with heartbeat for user feedback
+			stopHeartbeat := al.startHeartbeat(ctx, opts.StreamCallback, "thinking")
 			response, err = al.provider.Chat(ctx, messages, providerToolDefs, al.model, map[string]interface{}{
 				"max_tokens":  8192,
 				"temperature": 0.7,
 			})
+			stopHeartbeat()
 
 			if err == nil {
 				break // Success
@@ -862,19 +865,17 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 		if response.Content != "" {
 			finalContent = response.Content
 
-			// SoTA AGENT BEHAVIOR: Send intermediate thoughts/preamble immediately.
+			// SoTA AGENT BEHAVIOR: Send assistant content/thoughts immediately.
 			// This provides instant feedback to the user that the agent is working.
-			if len(response.ToolCalls) > 0 {
-				if opts.StreamCallback != nil && response.Content != "" {
-					opts.StreamCallback(response.Content)
-				} else if opts.SendResponse && !constants.IsInternalChannel(opts.Channel) {
-					al.bus.PublishOutbound(bus.OutboundMessage{
-						Channel: opts.Channel,
-						ChatID:  opts.ChatID,
-						Content: response.Content,
-					})
-					logger.DebugCF("agent", "Sent intermediate thought to user", map[string]interface{}{"content_len": len(response.Content)})
-				}
+			if opts.StreamCallback != nil {
+				opts.StreamCallback(response.Content)
+			} else if opts.SendResponse && !constants.IsInternalChannel(opts.Channel) {
+				al.bus.PublishOutbound(bus.OutboundMessage{
+					Channel: opts.Channel,
+					ChatID:  opts.ChatID,
+					Content: response.Content,
+				})
+				logger.DebugCF("agent", "Sent assistant content to user", map[string]interface{}{"content_len": len(response.Content)})
 			}
 		}
 
@@ -1004,7 +1005,9 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 			}
 
 			toolStart := time.Now()
+			stopToolHeartbeat := al.startHeartbeat(ctx, opts.StreamCallback, fmt.Sprintf("executing %s", tc.Name))
 			toolResult := al.tools.ExecuteWithContext(ctx, tc.Name, tc.Arguments, opts.Channel, opts.ChatID, asyncCallback)
+			stopToolHeartbeat()
 			toolDur := time.Since(toolStart).Milliseconds()
 			turnToolMS += toolDur
 			toolTotalMS += toolDur
@@ -1518,4 +1521,45 @@ func (al *AgentLoop) handleCommand(ctx context.Context, msg bus.InboundMessage) 
 	}
 
 	return "", false
+}
+
+// startHeartbeat starts a background goroutine that sends periodic progress updates
+// via the stream callback if the operation takes too long.
+// It returns a function that should be called when the operation completes.
+func (al *AgentLoop) startHeartbeat(ctx context.Context, callback func(string), label string) func() {
+	if callback == nil {
+		return func() {}
+	}
+
+	done := make(chan struct{})
+
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+
+		startTime := time.Now()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				elapsed := int(time.Since(startTime).Seconds())
+				// Use a subtle prefix for heartbeats
+				callback(fmt.Sprintf(".. %s (still working, %ds) ..", label, elapsed))
+			}
+		}
+	}()
+
+	return func() {
+		// Close done channel to stop the goroutine.
+		// Use a temporary channel to avoid double-close panic if called multiple times.
+		select {
+		case <-done:
+			// already closed
+		default:
+			close(done)
+		}
+	}
 }

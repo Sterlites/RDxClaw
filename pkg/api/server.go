@@ -246,6 +246,7 @@ func (s *Server) handleChatCompletion(w http.ResponseWriter, r *http.Request) {
 			data, _ := json.Marshal(chunk)
 			fmt.Fprintf(w, "data: %s\n\n", string(data))
 		} else {
+			// Final chunk for streaming: usually empty content with stop reason
 			chunk := ChatCompletionResponse{
 				ID:      fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano()),
 				Object:  "chat.completion.chunk",
@@ -254,13 +255,14 @@ func (s *Server) handleChatCompletion(w http.ResponseWriter, r *http.Request) {
 				Choices: []ChatCompletionChoice{
 					{
 						Index:        0,
-						Message:      ChatMessage{Role: "assistant", Content: response},
+						Message:      ChatMessage{Role: "assistant", Content: ""},
 						FinishReason: "stop",
 					},
 				},
 			}
 			data, _ := json.Marshal(chunk)
 			fmt.Fprintf(w, "data: %s\n\n", string(data))
+			flusher.Flush()
 		}
 
 		fmt.Fprintf(w, "data: [DONE]\n\n")
