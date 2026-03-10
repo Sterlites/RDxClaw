@@ -451,6 +451,33 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	agents := manager.ListAgents()
+	
+	// Prepend Primary Agent if loop is running
+	if s.agentLoop.IsRunning() {
+		primaryAgent := map[string]interface{}{
+			"id":             "CORE_0000",
+			"task":           "RDxClaw Kernel Process",
+			"label":          "PrimaryAgent",
+			"status":         "RUNNING",
+			"created":        s.startedAt.UnixMilli(),
+			"origin_channel": "system",
+			"is_primary":     true,
+		}
+		
+		// Convert existing agents to []interface{} to easily prepend
+		var combined []interface{}
+		combined = append(combined, primaryAgent)
+		for _, a := range agents {
+			combined = append(combined, a)
+		}
+		
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"agents": combined,
+			"count":  len(combined),
+		})
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"agents": agents,
 		"count":  len(agents),

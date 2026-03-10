@@ -177,7 +177,8 @@ async function fetchJSON(endpoint, options = {}) {
 
     const res = await fetch(`${API_BASE}${endpoint}`, {
       ...options,
-      headers: headers
+      headers: headers,
+      cache: 'no-store'
     });
 
     if (res.status === 401) {
@@ -364,6 +365,9 @@ async function loadAgents() {
     const displayId = `[AG-${id.substring(0,4).toUpperCase()}]`;
     const isRunning = status === 'RUNNING' || status === 'ACTIVE';
     
+    const isPrimary = agent.is_primary || agent.IsPrimary || false;
+    const actionBtn = isPrimary ? `<button class="primary disabled" disabled>CORE</button>` : `<button class="danger" onclick="killAgent('${id}')">TERMINATE</button>`;
+    
     tr.innerHTML = `
       <td><span class="agent-id">${displayId}</span></td>
       <td><span class="${isRunning ? 'typing' : ''}">${task}</span></td>
@@ -373,7 +377,7 @@ async function loadAgents() {
         </div>
       </td>
       <td>${Math.round((Date.now() - created)/60000)} MINS</td>
-      <td><button class="danger" onclick="killAgent('${id}')">TERMINATE</button></td>
+      <td>${actionBtn}</td>
     `;
     tbody.appendChild(tr);
   });
