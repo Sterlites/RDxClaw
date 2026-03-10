@@ -3,6 +3,7 @@ package auth
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -54,6 +55,7 @@ func TestStoreRoundtrip(t *testing.T) {
 	tmpDir := t.TempDir()
 	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", tmpDir)
+	t.Setenv("USERPROFILE", tmpDir)
 	defer os.Setenv("HOME", origHome)
 
 	cred := &AuthCredential{
@@ -91,6 +93,7 @@ func TestStoreFilePermissions(t *testing.T) {
 	tmpDir := t.TempDir()
 	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", tmpDir)
+	t.Setenv("USERPROFILE", tmpDir)
 	defer os.Setenv("HOME", origHome)
 
 	cred := &AuthCredential{
@@ -107,9 +110,13 @@ func TestStoreFilePermissions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stat() error: %v", err)
 	}
-	perm := info.Mode().Perm()
-	if perm != 0600 {
-		t.Errorf("file permissions = %o, want 0600", perm)
+	if runtime.GOOS != "windows" {
+		perm := info.Mode().Perm()
+		if perm != 0600 {
+			t.Errorf("file permissions = %o, want 0600", perm)
+		}
+	} else {
+		t.Log("Skipping permission check on Windows")
 	}
 }
 
@@ -117,6 +124,7 @@ func TestStoreMultiProvider(t *testing.T) {
 	tmpDir := t.TempDir()
 	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", tmpDir)
+	t.Setenv("USERPROFILE", tmpDir)
 	defer os.Setenv("HOME", origHome)
 
 	openaiCred := &AuthCredential{AccessToken: "openai-token", Provider: "openai", AuthMethod: "oauth"}
@@ -150,6 +158,7 @@ func TestDeleteCredential(t *testing.T) {
 	tmpDir := t.TempDir()
 	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", tmpDir)
+	t.Setenv("USERPROFILE", tmpDir)
 	defer os.Setenv("HOME", origHome)
 
 	cred := &AuthCredential{AccessToken: "to-delete", Provider: "openai", AuthMethod: "oauth"}
@@ -174,6 +183,7 @@ func TestLoadStoreEmpty(t *testing.T) {
 	tmpDir := t.TempDir()
 	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", tmpDir)
+	t.Setenv("USERPROFILE", tmpDir)
 	defer os.Setenv("HOME", origHome)
 
 	store, err := LoadStore()

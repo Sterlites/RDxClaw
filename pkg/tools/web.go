@@ -267,7 +267,8 @@ func (t *WebSearchTool) Execute(ctx context.Context, args map[string]interface{}
 }
 
 type WebFetchTool struct {
-	maxChars int
+	maxChars        int
+	AllowPrivateIPs bool // Only for testing; allows httptest localhost servers
 }
 
 func NewWebFetchTool(maxChars int) *WebFetchTool {
@@ -331,9 +332,11 @@ func (t *WebFetchTool) Execute(ctx context.Context, args map[string]interface{})
 		return ErrorResult(fmt.Sprintf("failed to resolve host %s: %v", host, err))
 	}
 
-	for _, ip := range ips {
-		if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsPrivate() {
-			return ErrorResult(fmt.Sprintf("access to private/internal IP address %s is blocked", ip.String()))
+	if !t.AllowPrivateIPs {
+		for _, ip := range ips {
+			if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsPrivate() {
+				return ErrorResult(fmt.Sprintf("access to private/internal IP address %s is blocked", ip.String()))
+			}
 		}
 	}
 

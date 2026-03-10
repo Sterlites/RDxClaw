@@ -40,12 +40,12 @@ func TestAuthMiddleware(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	})
 
-	t.Run("allows unauthenticated request when no key configured", func(t *testing.T) {
+	t.Run("rejects request when no key configured on server", func(t *testing.T) {
 		middleware := AuthMiddleware("", handler)
 		req := httptest.NewRequest("GET", "/v1/skills", nil)
 		rr := httptest.NewRecorder()
 		middleware.ServeHTTP(rr, req)
-		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	})
 
 	t.Run("health endpoint bypasses auth", func(t *testing.T) {

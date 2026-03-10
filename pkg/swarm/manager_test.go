@@ -18,10 +18,14 @@ type MockProvider struct {
 func (m *MockProvider) Chat(ctx context.Context, messages []providers.Message, tools []providers.ToolDefinition, model string, options map[string]any) (*providers.LLMResponse, error) {
 	return &providers.LLMResponse{
 		Content: m.Response,
-		Usage: providers.UsageInfo{
+		Usage: &providers.UsageInfo{
 			TotalTokens: 100,
 		},
 	}, nil
+}
+
+func (m *MockProvider) GetDefaultModel() string {
+	return "test-model"
 }
 
 func (m *MockProvider) EstimateTokens(messages []providers.Message) int {
@@ -73,7 +77,7 @@ func TestManager_Kill(t *testing.T) {
 	// We can't easily wait for it to be mid-execution with a simple mock without channels
 	// but we can test the status transition.
 
-	id, _ := manager.Spawn(context.Background(), "Long task", "kill-me", "ch", "chat", nil)
+	_, _ = manager.Spawn(context.Background(), "Long task", "kill-me", "ch", "chat", nil)
 	// Extract ID from message: "Spawned agent 'kill-me' (ID: agent-1) for task: Long task"
 	// ID is generated as agent-1, agent-2...
 	agentID := "agent-1"

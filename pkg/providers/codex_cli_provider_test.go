@@ -401,12 +401,27 @@ func TestCodexCliProvider_GetDefaultModel(t *testing.T) {
 func createMockCodexCLI(t *testing.T, events []string) string {
 	t.Helper()
 	tmpDir := t.TempDir()
-	scriptPath := filepath.Join(tmpDir, "codex")
+	
+	name := "codex"
+	isWindows := os.PathSeparator == '\\'
+	if isWindows {
+		name += ".bat"
+	}
+	scriptPath := filepath.Join(tmpDir, name)
 
 	var sb strings.Builder
-	sb.WriteString("#!/bin/bash\n")
-	for _, event := range events {
-		sb.WriteString(fmt.Sprintf("echo '%s'\n", event))
+	if isWindows {
+		sb.WriteString("@echo off\n")
+		for _, event := range events {
+			// Replace single quotes with nothing or escape them for batch
+			cleanEvent := strings.ReplaceAll(event, "'", "")
+			sb.WriteString(fmt.Sprintf("echo %s\n", cleanEvent))
+		}
+	} else {
+		sb.WriteString("#!/bin/bash\n")
+		for _, event := range events {
+			sb.WriteString(fmt.Sprintf("echo '%s'\n", event))
+		}
 	}
 
 	if err := os.WriteFile(scriptPath, []byte(sb.String()), 0755); err != nil {
@@ -473,12 +488,25 @@ func TestCodexCliProvider_MockCLI_Error(t *testing.T) {
 func TestCodexCliProvider_MockCLI_WithModel(t *testing.T) {
 	// Mock script that captures args to verify model flag is passed
 	tmpDir := t.TempDir()
-	scriptPath := filepath.Join(tmpDir, "codex")
-	script := `#!/bin/bash
+	isWindows := os.PathSeparator == '\\'
+	name := "codex"
+	if isWindows {
+		name += ".bat"
+	}
+	scriptPath := filepath.Join(tmpDir, name)
+	
+	argsFile := filepath.Join(tmpDir, "args.txt")
+	var script string
+	if isWindows {
+		// On Windows, use @echo off and %* for arguments
+		script = fmt.Sprintf("@echo off\necho %%* > \"%s\"\necho {\"type\":\"item.completed\",\"item\":{\"id\":\"1\",\"type\":\"agent_message\",\"text\":\"ok\"}}\necho {\"type\":\"turn.completed\"}", argsFile)
+	} else {
+		script = `#!/bin/bash
 # Write args to a file for verification
-echo "$@" > "` + filepath.Join(tmpDir, "args.txt") + `"
+echo "$@" > "` + argsFile + `"
 echo '{"type":"item.completed","item":{"id":"1","type":"agent_message","text":"ok"}}'
 echo '{"type":"turn.completed"}'`
+	}
 
 	if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
 		t.Fatal(err)
