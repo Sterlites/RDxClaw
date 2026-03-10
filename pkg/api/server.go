@@ -198,6 +198,76 @@ func (s *Server) handleChatCompletion(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 	defer cancel()
 
+	if req.Stream {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			writeError(w, http.StatusInternalServerError, "streaming_unsupported", "streaming unsupported")
+			return
+		}
+
+		sendChunk := func(content string) {
+			chunk := ChatCompletionResponse{
+				ID:      fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano()),
+				Object:  "chat.completion.chunk",
+				Created: time.Now().Unix(),
+				Model:   req.Model,
+				Choices: []ChatCompletionChoice{
+					{
+						Index:   0,
+						Message: ChatMessage{Role: "assistant", Content: content},
+					},
+				},
+			}
+			data, _ := json.Marshal(chunk)
+			fmt.Fprintf(w, "data: %s\n\n", string(data))
+			flusher.Flush()
+		}
+
+		response, err := s.agentLoop.ProcessStreamWithChannel(ctx, userContent, sessionKey, channel, "api", sendChunk)
+		if err != nil {
+			s.recordEvent("agent", "error", fmt.Sprintf("Chat error: %v", err))
+			chunk := ChatCompletionResponse{
+				ID:      fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano()),
+				Object:  "chat.completion.chunk",
+				Created: time.Now().Unix(),
+				Model:   req.Model,
+				Choices: []ChatCompletionChoice{
+					{
+						Index:        0,
+						Message:      ChatMessage{Role: "assistant", Content: fmt.Sprintf("Error: %v", err)},
+						FinishReason: "error",
+					},
+				},
+			}
+			data, _ := json.Marshal(chunk)
+			fmt.Fprintf(w, "data: %s\n\n", string(data))
+		} else {
+			chunk := ChatCompletionResponse{
+				ID:      fmt.Sprintf("chatcmpl-%d", time.Now().UnixNano()),
+				Object:  "chat.completion.chunk",
+				Created: time.Now().Unix(),
+				Model:   req.Model,
+				Choices: []ChatCompletionChoice{
+					{
+						Index:        0,
+						Message:      ChatMessage{Role: "assistant", Content: response},
+						FinishReason: "stop",
+					},
+				},
+			}
+			data, _ := json.Marshal(chunk)
+			fmt.Fprintf(w, "data: %s\n\n", string(data))
+		}
+
+		fmt.Fprintf(w, "data: [DONE]\n\n")
+		flusher.Flush()
+		return
+	}
+
 	response, err := s.agentLoop.ProcessDirectWithChannel(ctx, userContent, sessionKey, channel, "api")
 	if err != nil {
 		s.recordEvent("agent", "error", fmt.Sprintf("Chat error: %v", err))

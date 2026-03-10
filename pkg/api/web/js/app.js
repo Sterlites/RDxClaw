@@ -717,7 +717,8 @@ async function sendMessage() {
       body: JSON.stringify({
         messages: chatMessages.slice(-20), // Send last 20 messages for context
         channel: 'mission-control',
-        session_key: SESSION_ID
+        session_key: SESSION_ID,
+        stream: true
       })
     });
 
@@ -725,20 +726,79 @@ async function sendMessage() {
       showAuth();
       throw new Error("UNAUTHORIZED");
     }
-    const data = await res.json();
     
-    const duration = Date.now() - startTime;
     if (!res.ok) {
-      const errMsg = (data.error && data.error.message) ? data.error.message : `HTTP error ${res.status}`;
-      chatMessages.push({ role: 'assistant', content: `Error: ${errMsg}`, timestamp: new Date() });
-    } else if (data.choices && data.choices.length > 0) {
-      const assistantMsg = data.choices[0].message;
-      assistantMsg.timestamp = new Date();
-      assistantMsg.telemetry = duration;
-      chatMessages.push(assistantMsg);
-    } else {
-      chatMessages.push({ role: 'assistant', content: 'Error: Cannot communicate with brain.', timestamp: new Date() });
+      const errorText = await res.text();
+      throw new Error(`HTTP error ${res.status}: ${errorText}`);
     }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    
+    const assistantMsg = { role: 'assistant', content: '', timestamp: new Date() };
+    chatMessages.push(assistantMsg);
+    renderChat();
+
+    let done = false;
+    let buffer = '';
+    while (!done) {
+      const { value, done: streamDone } = await reader.read();
+      done = streamDone;
+      if (value) {
+        buffer += decoder.decode(value, { stream: true });
+        let newlineIdx;
+        while ((newlineIdx = buffer.indexOf('\n')) >= 0) {
+          const line = buffer.slice(0, newlineIdx).trim();
+          buffer = buffer.slice(newlineIdx + 1);
+          
+          if (line.startsWith('data: ')) {
+            const dataStr = line.slice(6);
+            if (dataStr === '[DONE]') {
+              done = true; // stop parsing
+              break;
+            }
+            try {
+              const data = JSON.parse(dataStr);
+              if (data.choices && data.choices.length > 0) {
+                const choice = data.choices[0];
+                const msg = choice.message;
+                
+                if (msg && msg.content) {
+                  // If it's the final stop message or an intermediate piece
+                  if (choice.finish_reason === 'stop' || choice.finish_reason === 'error') {
+                    // Final response
+                    if (assistantMsg.content) {
+                      assistantMsg.content += '\n\n---\n\n' + msg.content;
+                    } else {
+                      assistantMsg.content = msg.content;
+                    }
+                  } else {
+                    // Intermediate thought
+                    // Only append if it's different from what we already have, or just overwrite it if it's sending the cumulative thought
+                    // Wait, the API sends the full thought block from the agent loop intermediate step.
+                    // If multiple tools are called, it builds up. Our SSE chunk sends `response.Content` which is the FULL thought so far!
+                    // Wait, no. If iteration 1 has thought A, then iteration 2 has thought B.
+                    // Let's just append with a separator.
+                    if (assistantMsg.content && !assistantMsg.content.endsWith(msg.content)) {
+                      assistantMsg.content += '\n\n> ' + msg.content.replace(/\n/g, '\n> ');
+                    } else if (!assistantMsg.content) {
+                      assistantMsg.content = '> ' + msg.content.replace(/\n/g, '\n> ');
+                    }
+                  }
+                  renderChat();
+                }
+              }
+            } catch (e) {
+              console.error("Stream parse error:", e, dataStr);
+            }
+          }
+        }
+      }
+    }
+    
+    assistantMsg.telemetry = Date.now() - startTime;
+    assistantMsg.timestamp = new Date();
+
   } catch (err) {
     chatMessages.push({ role: 'assistant', content: `Connection failed: ${err.message}` });
   }

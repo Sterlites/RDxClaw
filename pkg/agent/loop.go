@@ -97,6 +97,7 @@ type processOptions struct {
 	EnableSummary   bool   // Whether to trigger summarization
 	SendResponse    bool   // Whether to send response via bus
 	NoHistory       bool   // If true, don't load session history (for heartbeat)
+	StreamCallback  func(string) // Optional callback for intermediate chunks/thoughts
 }
 
 // createToolRegistry creates a tool registry with common tools.
@@ -391,6 +392,19 @@ func (al *AgentLoop) ProcessDirectWithChannel(ctx context.Context, content, sess
 	}
 
 	return al.processMessage(ctx, msg)
+}
+
+func (al *AgentLoop) ProcessStreamWithChannel(ctx context.Context, content, sessionKey, channel, chatID string, streamingCb func(string)) (string, error) {
+	return al.runAgentLoop(ctx, processOptions{
+		SessionKey:      sessionKey,
+		Channel:         channel,
+		ChatID:          chatID,
+		UserMessage:     content,
+		DefaultResponse: "I've completed processing your request, but the model did not provide a textual response. This can happen if the task was strictly action-oriented and no final summary was generated.",
+		EnableSummary:   true,
+		SendResponse:    false,
+		StreamCallback:  streamingCb,
+	})
 }
 
 // ProcessHeartbeat processes a heartbeat request without session history.
@@ -768,13 +782,17 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 
 			// SoTA AGENT BEHAVIOR: Send intermediate thoughts/preamble immediately if opts.SendResponse is true.
 			// This provides instant feedback to the user that the agent is working and thinking.
-			if len(response.ToolCalls) > 0 && opts.SendResponse && !constants.IsInternalChannel(opts.Channel) {
-				al.bus.PublishOutbound(bus.OutboundMessage{
-					Channel: opts.Channel,
-					ChatID:  opts.ChatID,
-					Content: response.Content,
-				})
-				logger.DebugCF("agent", "Sent intermediate thought to user", map[string]interface{}{"content_len": len(response.Content)})
+			if len(response.ToolCalls) > 0 {
+				if opts.StreamCallback != nil && response.Content != "" {
+					opts.StreamCallback(response.Content)
+				} else if opts.SendResponse && !constants.IsInternalChannel(opts.Channel) {
+					al.bus.PublishOutbound(bus.OutboundMessage{
+						Channel: opts.Channel,
+						ChatID:  opts.ChatID,
+						Content: response.Content,
+					})
+					logger.DebugCF("agent", "Sent intermediate thought to user", map[string]interface{}{"content_len": len(response.Content)})
+				}
 			}
 		}
 
