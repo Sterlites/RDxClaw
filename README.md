@@ -41,7 +41,7 @@ The economy of intelligence. Installable, monetizable, and portable intelligence
 Integrate AI agents into your existing enterprise stack with OpenAI-compatible endpoints.
 - **Start the Engine**: `rdxclaw server --port 8080 --api-key YOUR_SECRET`
 - **Trigger Anywhere**: Connect to Zapier, Shopify, or custom ERPs via standard REST calls.
-- **Business Impact**: Turns RDxClaw into a background microservice that powers your entire automation pipeline.
+- **Business Impact**: Turns RDxClaw into a background microservice that powers your entire automation pipeline. Visualize it all through [Mission Control](#-mission-control-visual-dashboard).
 
 ### 3. 🧠 Corporate Memory (RAG)
 Privacy-first local intelligence using a zero-dependency BM25 search engine.
@@ -53,7 +53,51 @@ Privacy-first local intelligence using a zero-dependency BM25 search engine.
 Coordinating teams of agents for complex, interdependent workflows.
 - **Monitor Swarms**: `rdxclaw swarm list` to track all active background agents.
 - **Autonomous Delegation**: Agents use the `spawn` tool to trigger sub-agents for specialized long-running tasks.
-- **Business Impact**: Scale from a single assistant to an entire autonomous department.
+- **Business Impact**: Scale from a single assistant to an entire autonomous department. Manage them via [Mission Control](#-mission-control-visual-dashboard).
+
+---
+
+## 🎮 Mission Control (Visual Dashboard)
+
+RDxClaw includes a high-performance, matrix-themed **Mission Control** dashboard. It provides real-time visibility into your agent swarms, system performance, and workspace memory.
+
+### Key Features
+- **📊 Real-time Dashboard**: Monitor uptime, active agents, memory usage, and primary model status.
+- **🐝 Swarm Management**: View and manage all background agents (active tasks, status, runtime).
+- **🛠️ Skills Library**: Browse installed capabilities and their specific functions.
+- **📟 Integrated Terminal**: Directly command the primary agent via a web-based console.
+- **🧠 Memory Explorer**: Browse and edit documents in your agent's long-term memory.
+- **⚡ Telemetry**: Detailed latency breakdown (Startup, LLM Inference, Tool Execution).
+
+---
+
+## 🛠️ Mission Control Setup & Access
+
+### 1. Start the Mission Control Server
+Run the following command to start the backend engine and host the dashboard:
+
+```bash
+rdxclaw server --port 8080 --api-key YOUR_SECRET_KEY
+```
+
+> [!TIP]
+> You can also set these via environment variables:
+> `export RDXCLAW_PORT=8080`
+> `export RDXCLAW_API_KEY=YOUR_SECRET_KEY`
+
+### 2. Access the Dashboard
+Open your favorite browser and navigate to:
+**`http://localhost:8080`**
+
+### 3. Establish Uplink
+Upon first access, Mission Control will prompt for your **API Key**. Enter the key you used in Step 1 to securely connect to the heart of the engine.
+
+### 4. GitHub Users: Running from Source
+If you are developing or running from the repository:
+1. Ensure you have **Go 1.21+** installed.
+2. Clone the repo: `git clone https://github.com/Sterlites/RDxClaw.git`
+3. Build the binary: `make build`
+4. Run the server: `./build/rdxclaw server --port 8080`
 
 ---
 
