@@ -148,8 +148,8 @@ func (s *Server) Start() error {
 		Addr:              addr,
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       10 * time.Minute, // Large for long chat streams
-		WriteTimeout:      10 * time.Minute,
+		ReadTimeout:       24 * time.Hour,
+		WriteTimeout:      24 * time.Hour,
 		IdleTimeout:       120 * time.Second,
 	}
 
@@ -195,7 +195,7 @@ func (s *Server) handleChatCompletion(w http.ResponseWriter, r *http.Request) {
 		channel = "api"
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(r.Context(), 24*time.Hour)
 	defer cancel()
 
 	if req.Stream {
@@ -321,7 +321,7 @@ func (s *Server) handleSkillExecute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	startTime := time.Now()
-	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(r.Context(), 24*time.Hour)
 	defer cancel()
 
 	response, err := s.agentLoop.ProcessDirectWithChannel(ctx, prompt, sessionKey, "api", "api")
