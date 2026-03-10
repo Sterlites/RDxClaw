@@ -9,7 +9,6 @@ package agent
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -634,23 +633,73 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, opts processOptions) (str
 
 // runLLMIteration executes the LLM call loop with tool handling.
 // Returns the final content, iteration count, LLM time, tool time, turn stats, and any error.
+//
+// This is the core agent loop. It implements SoTA patterns inspired by OpenClaw's
+// production-grade run loop:
+//   - Error classification with distinct recovery paths per error kind
+//   - Exponential backoff with jitter for transient/rate-limit errors
+//   - Multi-layer context overflow recovery (compaction → tool result truncation → give up)
+//   - Hard outer-loop guard to prevent runaway retries
+//   - Per-turn usage accumulation for accurate context-size reporting
+//   - Tool result size guards to prevent context blowout
+//   - Abort/cancellation checks between iterations and tool calls
+//   - Capped preamble nudging to prevent infinite nudge loops
 func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.Message, opts processOptions) (string, int, int64, int64, []IterationStats, error) {
 	iteration := 0
 	var finalContent string
 	var llmTotalMS int64
 	var toolTotalMS int64
 	var turns []IterationStats
-	var lastTurnHadContent bool
 	var response *providers.LLMResponse
 	var llmDur int64
 
+	// SoTA: Usage tracking across all LLM calls in this turn
+	usage := &UsageAccumulator{}
+
+	// SoTA: Multi-layer overflow recovery state
+	overflowCompactionAttempts := 0
+	toolResultTruncationAttempted := false
+
+	// SoTA: Preamble nudge counter (capped at MaxConsecutiveNudges)
+	consecutiveNudges := 0
+
+	// SoTA: Hard outer-loop guard to prevent runaway retries.
+	// maxIterations governs "useful" iterations; this guard covers retry overhead.
+	hardLoopLimit := al.maxIterations + 8
+	totalLoops := 0
+
 	for iteration < al.maxIterations {
 		iteration++
+		totalLoops++
+
+		// SoTA: Hard outer-loop guard
+		if totalLoops > hardLoopLimit {
+			logger.ErrorCF("agent", "Hard loop limit exceeded",
+				map[string]interface{}{
+					"total_loops": totalLoops,
+					"hard_limit":  hardLoopLimit,
+					"iteration":   iteration,
+				})
+			if finalContent == "" {
+				finalContent = "Request failed after repeated internal retries. Please try again or start a fresh session."
+			}
+			break
+		}
+
+		// SoTA: Check context cancellation before each iteration
+		select {
+		case <-ctx.Done():
+			logger.WarnCF("agent", "Context cancelled between iterations",
+				map[string]interface{}{"iteration": iteration})
+			return finalContent, iteration, llmTotalMS, toolTotalMS, turns, ctx.Err()
+		default:
+		}
 
 		logger.DebugCF("agent", "LLM iteration",
 			map[string]interface{}{
-				"iteration": iteration,
-				"max":       al.maxIterations,
+				"iteration":  iteration,
+				"max":        al.maxIterations,
+				"total_loops": totalLoops,
 			})
 
 		// Build tool definitions
@@ -676,11 +725,10 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 				"tools_json":    formatToolsForLog(providerToolDefs),
 			})
 
+		// ── SoTA: LLM call with error-classified retry ──
 		var err error
-
 		llmStart := time.Now()
-		// Retry loop for context/token errors
-		maxRetries := 2
+		maxRetries := 3 // Attempts beyond the first try
 		for retry := 0; retry <= maxRetries; retry++ {
 			response, err = al.provider.Chat(ctx, messages, providerToolDefs, al.model, map[string]interface{}{
 				"max_tokens":  8192,
@@ -691,83 +739,113 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 				break // Success
 			}
 
-			errMsg := strings.ToLower(err.Error())
-			// Check for context window errors (provider specific, but usually contain "token" or "invalid")
-			isContextWindowError := (strings.Contains(errMsg, "token") ||
-				strings.Contains(errMsg, "context") ||
-				strings.Contains(errMsg, "invalidparameter") ||
-				strings.Contains(errMsg, "length")) &&
-				!errors.Is(err, context.Canceled) &&
-				!errors.Is(err, context.DeadlineExceeded)
-
-			if isContextWindowError && retry < maxRetries {
-				logger.WarnCF("agent", "Context window error detected, attempting compression", map[string]interface{}{
-					"error": err.Error(),
-					"retry": retry,
+			errKind := classifyLLMError(err)
+			logger.WarnCF("agent", "LLM call error classified",
+				map[string]interface{}{
+					"error":     err.Error(),
+					"kind":      errKind.String(),
+					"retry":     retry,
+					"retryable": isRetryable(errKind),
 				})
 
-				// Notify user on first retry only
-				if retry == 0 && !constants.IsInternalChannel(opts.Channel) && opts.SendResponse {
-					al.bus.PublishOutbound(bus.OutboundMessage{
-						Channel: opts.Channel,
-						ChatID:  opts.ChatID,
-						Content: "⚠️ Context window exceeded. Compressing history and retrying...",
-					})
+			// ── Context overflow: compaction recovery ──
+			if errKind == ErrContextOverflow && retry < maxRetries {
+				if overflowCompactionAttempts >= MaxOverflowCompactionAttempts {
+					// SoTA: Layer 3 — exhausted compaction budget, try tool result truncation
+					if !toolResultTruncationAttempted {
+						toolResultTruncationAttempted = true
+						truncated := al.truncateOversizedToolResults(messages)
+						if truncated > 0 {
+							logger.WarnCF("agent", "Truncated oversized tool results as overflow recovery",
+								map[string]interface{}{"truncated_count": truncated})
+							continue
+						}
+					}
+					// Give up on context recovery
+					logger.ErrorCF("agent", "Context overflow recovery exhausted",
+						map[string]interface{}{
+							"compaction_attempts":        overflowCompactionAttempts,
+							"tool_truncation_attempted": toolResultTruncationAttempted,
+						})
+					break
 				}
 
-				// Force compression
+				overflowCompactionAttempts++
+				logger.WarnCF("agent", "Context overflow, attempting compaction",
+					map[string]interface{}{
+						"error":    err.Error(),
+						"attempt":  overflowCompactionAttempts,
+						"max":      MaxOverflowCompactionAttempts,
+					})
+
+				// Notify user on first attempt
+				if overflowCompactionAttempts == 1 && !constants.IsInternalChannel(opts.Channel) {
+					if opts.StreamCallback != nil {
+						opts.StreamCallback("⚠️ Context window exceeded. Compressing history and retrying...")
+					} else if opts.SendResponse {
+						al.bus.PublishOutbound(bus.OutboundMessage{
+							Channel: opts.Channel,
+							ChatID:  opts.ChatID,
+							Content: "⚠️ Context window exceeded. Compressing history and retrying...",
+						})
+					}
+				}
+
+				// Layer 1: Force compression
 				al.forceCompression(opts.SessionKey)
 
-				// Rebuild messages with compressed history
-				// Note: We need to reload history from session manager because forceCompression changed it
+				// Rebuild messages from compressed history
 				newHistory := al.sessions.GetHistory(opts.SessionKey)
 				newSummary := al.sessions.GetSummary(opts.SessionKey)
-
-				// Re-create messages for the next attempt
-				// We keep the current user message (opts.UserMessage) effectively
 				messages = al.contextBuilder.BuildMessages(
 					newHistory,
 					newSummary,
-					opts.UserMessage,
+					"", // Empty — history already contains the relevant messages
 					nil,
 					opts.Channel,
 					opts.ChatID,
 				)
-
-				// Important: If we are in the middle of a tool loop (iteration > 1),
-				// rebuilding messages from session history might duplicate the flow or miss context
-				// if intermediate steps weren't saved correctly.
-				// However, al.sessions.AddFullMessage is called after every tool execution,
-				// so GetHistory should reflect the current state including partial tool execution.
-				// But we need to ensure we don't duplicate the user message which is appended in BuildMessages.
-				// BuildMessages(history...) takes the stored history and appends the *current* user message.
-				// If iteration > 1, the "current user message" was already added to history in step 3 of runAgentLoop.
-				// So if we pass opts.UserMessage again, we might duplicate it?
-				// Actually, step 3 is: al.sessions.AddMessage(opts.SessionKey, "user", opts.UserMessage)
-				// So GetHistory ALREADY contains the user message!
-
-				// CORRECTION:
-				messages = al.contextBuilder.BuildMessages(
-					newHistory,
-					newSummary,
-					"", // Empty because history already contains the relevant messages
-					nil,
-					opts.Channel,
-					opts.ChatID,
-				)
-
 				continue
 			}
 
-			// Real error or success, break loop
+			// ── Rate limit / Transient: exponential backoff ──
+			if (errKind == ErrRateLimit || errKind == ErrTransient || errKind == ErrTimeout) && retry < maxRetries {
+				backoff := computeBackoff(DefaultBackoffPolicy, retry+1)
+				logger.WarnCF("agent", "Backing off before retry",
+					map[string]interface{}{
+						"kind":       errKind.String(),
+						"retry":      retry,
+						"backoff_ms": backoff.Milliseconds(),
+					})
+				if sleepErr := sleepWithContext(ctx, backoff); sleepErr != nil {
+					return finalContent, iteration, llmTotalMS, toolTotalMS, turns, sleepErr
+				}
+				continue
+			}
+
+			// ── Fatal / Auth / Unknown: don't retry ──
+			if errKind == ErrFatal || errKind == ErrAuth {
+				logger.ErrorCF("agent", "Non-retryable LLM error",
+					map[string]interface{}{
+						"kind":  errKind.String(),
+						"error": err.Error(),
+					})
+				break
+			}
+
+			// Unknown but retryable — simple retry without backoff
+			if retry < maxRetries {
+				continue
+			}
 			break
 		}
 
 		if err != nil {
-			logger.ErrorCF("agent", "LLM call failed",
+			logger.ErrorCF("agent", "LLM call failed after retries",
 				map[string]interface{}{
 					"iteration": iteration,
 					"error":     err.Error(),
+					"kind":      classifyLLMError(err).String(),
 				})
 			return "", iteration, llmTotalMS, toolTotalMS, turns, fmt.Errorf("LLM call failed after retries: %w", err)
 		}
@@ -775,13 +853,17 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 		llmDur = time.Since(llmStart).Milliseconds()
 		llmTotalMS += llmDur
 
+		// SoTA: Accumulate usage from this LLM call
+		if response.Usage != nil {
+			usage.Merge(response.Usage.PromptTokens, response.Usage.CompletionTokens, response.Usage.TotalTokens)
+		}
+
 		// Update turn content status and final content tracking
-		lastTurnHadContent = response.Content != ""
-		if lastTurnHadContent {
+		if response.Content != "" {
 			finalContent = response.Content
 
-			// SoTA AGENT BEHAVIOR: Send intermediate thoughts/preamble immediately if opts.SendResponse is true.
-			// This provides instant feedback to the user that the agent is working and thinking.
+			// SoTA AGENT BEHAVIOR: Send intermediate thoughts/preamble immediately.
+			// This provides instant feedback to the user that the agent is working.
 			if len(response.ToolCalls) > 0 {
 				if opts.StreamCallback != nil && response.Content != "" {
 					opts.StreamCallback(response.Content)
@@ -796,16 +878,19 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 			}
 		}
 
-		// Check if no tool calls
+		// Check if no tool calls — model is done or needs nudging
 		if len(response.ToolCalls) == 0 {
-			// Check for preamble or empty response
 			preamble := isPreamble(response.Content)
-			
-			if (response.Content == "" || preamble) && iteration < al.maxIterations {
-				logger.InfoCF("agent", "Model provided no summary (or only a preamble), nudging to continue",
+
+			// SoTA: Capped preamble nudging (max MaxConsecutiveNudges attempts)
+			if (response.Content == "" || preamble) && iteration < al.maxIterations && consecutiveNudges < MaxConsecutiveNudges {
+				consecutiveNudges++
+				logger.InfoCF("agent", "Nudging model for substantive response",
 					map[string]interface{}{
 						"iteration":   iteration,
 						"is_preamble": preamble,
+						"nudge_count": consecutiveNudges,
+						"max_nudges":  MaxConsecutiveNudges,
 					})
 
 				nudge := "Task in progress. Based on the tool results above, please provide a COMPREHENSIVE report/summary of your findings to the user. Do not simply say you will continue; provide the results now."
@@ -817,16 +902,19 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 					Role:    "system",
 					Content: nudge,
 				})
-				
-				// We don't break, we let the loop continue to the next iteration
-				// which will call the LLM again with the new nudge.
-				lastTurnHadContent = false // Force another turn if possible
 				continue
 			}
-			
-			// Truly done
+
+			// Truly done (or nudge cap reached)
+			if consecutiveNudges >= MaxConsecutiveNudges {
+				logger.WarnCF("agent", "Nudge cap reached, accepting current content",
+					map[string]interface{}{"nudge_count": consecutiveNudges})
+			}
 			break
 		}
+
+		// Reset nudge counter since the model is actively working (making tool calls)
+		consecutiveNudges = 0
 
 		// Log tool calls
 		toolNames := make([]string, 0, len(response.ToolCalls))
@@ -864,6 +952,15 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 		// Execute tool calls
 		var turnToolMS int64
 		for _, tc := range response.ToolCalls {
+			// SoTA: Check context cancellation between tool calls
+			select {
+			case <-ctx.Done():
+				logger.WarnCF("agent", "Context cancelled between tool calls",
+					map[string]interface{}{"tool": tc.Name, "iteration": iteration})
+				return finalContent, iteration, llmTotalMS, toolTotalMS, turns, ctx.Err()
+			default:
+			}
+
 			// Log tool call with arguments preview
 			argsJSON, _ := json.Marshal(tc.Arguments)
 			argsPreview := utils.Truncate(string(argsJSON), 200)
@@ -874,12 +971,7 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 				})
 
 			// Create async callback for tools that implement AsyncTool
-			// NOTE: Following openclaw's design, async tools do NOT send results directly to users.
-			// Instead, they notify the agent via PublishInbound, and the agent decides
-			// whether to forward the result to the user (in processSystemMessage).
 			asyncCallback := func(callbackCtx context.Context, result *tools.ToolResult) {
-				// Log the async completion but don't send directly to user
-				// The agent will handle user notification via processSystemMessage
 				if !result.Silent && result.ForUser != "" {
 					logger.InfoCF("agent", "Async tool completed, agent will handle notification",
 						map[string]interface{}{
@@ -915,6 +1007,17 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 				contentForLLM = toolResult.Err.Error()
 			}
 
+			// SoTA: Tool result size guard — truncate oversized results
+			if truncated, wasTruncated := truncateToolResult(contentForLLM); wasTruncated {
+				logger.WarnCF("agent", "Tool result truncated (exceeds size limit)",
+					map[string]interface{}{
+						"tool":          tc.Name,
+						"original_size": len(contentForLLM),
+						"max_size":      MaxToolResultBytes,
+					})
+				contentForLLM = truncated
+			}
+
 			toolResultMsg := providers.Message{
 				Role:       "tool",
 				Content:    contentForLLM,
@@ -934,19 +1037,58 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 		})
 	}
 
-	// Truly done
-	logger.InfoCF("agent", "LLM loop complete (no tool calls)",
+	// SoTA: Log completion with usage summary
+	var responseContentLen int
+	if response != nil {
+		responseContentLen = len(response.Content)
+	}
+	logger.InfoCF("agent", "LLM loop complete",
 		map[string]interface{}{
-			"iteration":     iteration,
-			"content_chars": len(response.Content),
+			"iteration":      iteration,
+			"total_loops":     totalLoops,
+			"content_chars":   responseContentLen,
+			"llm_calls":       usage.CallCount,
+			"total_input_tok": usage.InputTokens,
+			"total_output_tok": usage.OutputTokens,
 		})
-	turns = append(turns, IterationStats{
-		Iteration:          iteration,
-		LLMMS:              llmDur,
-		ProviderDurationMS: int64(response.DurationMS),
-	})
+	if response != nil {
+		turns = append(turns, IterationStats{
+			Iteration:          iteration,
+			LLMMS:              llmDur,
+			ProviderDurationMS: int64(response.DurationMS),
+		})
+	}
 
 	return finalContent, iteration, llmTotalMS, toolTotalMS, turns, nil
+}
+
+// truncateOversizedToolResults scans the message list for tool results that
+// exceed the context window's fair share and truncates them in-place.
+// Returns the number of messages truncated.
+func (al *AgentLoop) truncateOversizedToolResults(messages []providers.Message) int {
+	// Consider any tool result > 50% of context window as oversized
+	maxTokens := al.contextWindow / 2
+	maxChars := maxTokens * 3 // Rough chars-to-tokens estimate
+	truncated := 0
+
+	for i := range messages {
+		if messages[i].Role != "tool" {
+			continue
+		}
+		if len(messages[i].Content) > maxChars {
+			origLen := len(messages[i].Content)
+			messages[i].Content = messages[i].Content[:maxChars] +
+				"\n...[TRUNCATED: tool result exceeded context budget]..."
+			logger.WarnCF("agent", "Truncated oversized tool result in context",
+				map[string]interface{}{
+					"tool_call_id": messages[i].ToolCallID,
+					"original_len": origLen,
+					"truncated_to": maxChars,
+				})
+			truncated++
+		}
+	}
+	return truncated
 }
 
 func isPreamble(content string) bool {
