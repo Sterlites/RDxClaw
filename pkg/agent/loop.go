@@ -1013,7 +1013,7 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 			if !toolResult.Silent && toolResult.ForUser != "" {
 				if opts.StreamCallback != nil {
 					// We prefix it so the user knows it's an action/tool update
-					opts.StreamCallback("> " + strings.ReplaceAll(toolResult.ForUser, "\n", "\n> "))
+					opts.StreamCallback(">> (" + tc.Name + " output)\n>> " + strings.ReplaceAll(toolResult.ForUser, "\n", "\n>> "))
 				} else if opts.SendResponse {
 					al.bus.PublishOutbound(bus.OutboundMessage{
 						Channel: opts.Channel,
