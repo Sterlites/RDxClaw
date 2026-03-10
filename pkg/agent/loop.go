@@ -928,6 +928,19 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 				"iteration": iteration,
 			})
 
+		if len(toolNames) > 0 {
+			msg := fmt.Sprintf("> Executing %d actions: %s...", len(toolNames), strings.Join(toolNames, ", "))
+			if opts.StreamCallback != nil {
+				opts.StreamCallback(msg)
+			} else if opts.SendResponse && !constants.IsInternalChannel(opts.Channel) {
+				al.bus.PublishOutbound(bus.OutboundMessage{
+					Channel: opts.Channel,
+					ChatID:  opts.ChatID,
+					Content: msg,
+				})
+			}
+		}
+
 		// Build assistant message with tool calls
 		assistantMsg := providers.Message{
 			Role:    "assistant",
@@ -973,7 +986,16 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 			// Create async callback for tools that implement AsyncTool
 			asyncCallback := func(callbackCtx context.Context, result *tools.ToolResult) {
 				if !result.Silent && result.ForUser != "" {
-					logger.InfoCF("agent", "Async tool completed, agent will handle notification",
+					if opts.StreamCallback != nil {
+						opts.StreamCallback(">> " + strings.ReplaceAll(result.ForUser, "\n", "\n>> "))
+					} else if opts.SendResponse {
+						al.bus.PublishOutbound(bus.OutboundMessage{
+							Channel: opts.Channel,
+							ChatID:  opts.ChatID,
+							Content: result.ForUser,
+						})
+					}
+					logger.InfoCF("agent", "Async tool completed, handling notification",
 						map[string]interface{}{
 							"tool":        tc.Name,
 							"content_len": len(result.ForUser),
@@ -988,12 +1010,17 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 			toolTotalMS += toolDur
 
 			// Send ForUser content to user immediately if not Silent
-			if !toolResult.Silent && toolResult.ForUser != "" && opts.SendResponse {
-				al.bus.PublishOutbound(bus.OutboundMessage{
-					Channel: opts.Channel,
-					ChatID:  opts.ChatID,
-					Content: toolResult.ForUser,
-				})
+			if !toolResult.Silent && toolResult.ForUser != "" {
+				if opts.StreamCallback != nil {
+					// We prefix it so the user knows it's an action/tool update
+					opts.StreamCallback("> " + strings.ReplaceAll(toolResult.ForUser, "\n", "\n> "))
+				} else if opts.SendResponse {
+					al.bus.PublishOutbound(bus.OutboundMessage{
+						Channel: opts.Channel,
+						ChatID:  opts.ChatID,
+						Content: toolResult.ForUser,
+					})
+				}
 				logger.DebugCF("agent", "Sent tool result to user",
 					map[string]interface{}{
 						"tool":        tc.Name,
