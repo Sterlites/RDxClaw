@@ -634,8 +634,8 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, opts processOptions) (str
 // runLLMIteration executes the LLM call loop with tool handling.
 // Returns the final content, iteration count, LLM time, tool time, turn stats, and any error.
 //
-// This is the core agent loop. It implements SoTA patterns inspired by OpenClaw's
-// production-grade run loop:
+// This is the core agent loop. It implements SoTA patterns 
+// for production-grade run loops:
 //   - Error classification with distinct recovery paths per error kind
 //   - Exponential backoff with jitter for transient/rate-limit errors
 //   - Multi-layer context overflow recovery (compaction → tool result truncation → give up)

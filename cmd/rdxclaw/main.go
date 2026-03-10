@@ -221,7 +221,7 @@ func printHelp() {
 	fmt.Println("  server      Start rdxclaw headless API server")
 	fmt.Println("  status      Show rdxclaw status")
 	fmt.Println("  cron        Manage scheduled tasks")
-	fmt.Println("  migrate     Migrate from OpenClaw to rdxclaw")
+	fmt.Println("  migrate     Migrate from a previous installation  to rdxclaw")
 	fmt.Println("  skills      Manage skills (install, list, remove)")
 	fmt.Println("  swarm       Manage swarm agents (list, kill)")
 	fmt.Println("  version     Show version information")
@@ -407,7 +407,7 @@ func migrateCmd() {
 }
 
 func migrateHelp() {
-	fmt.Println("\nMigrate from OpenClaw to rdxclaw")
+	fmt.Println("\nMigrate from a previous system to rdxclaw")
 	fmt.Println()
 	fmt.Println("Usage: rdxclaw migrate [options]")
 	fmt.Println()
@@ -417,13 +417,13 @@ func migrateHelp() {
 	fmt.Println("  --config-only      Only migrate config, skip workspace files")
 	fmt.Println("  --workspace-only   Only migrate workspace files, skip config")
 	fmt.Println("  --force            Skip confirmation prompts")
-	fmt.Println("  --openclaw-home    Override OpenClaw home directory (default: ~/.openclaw)")
-	fmt.Println("  --rdxclaw-home    Override rdxclaw home directory (default: ~/.rdxclaw)")
+	fmt.Println("  --openclaw-home    Override source home directory (default: ~/.openclaw)")
+	fmt.Println("  --rdxclaw-home     Override rdxclaw home directory (default: ~/.rdxclaw)")
 	fmt.Println()
 	fmt.Println("Examples:")
-	fmt.Println("  rdxclaw migrate              Detect and migrate from OpenClaw")
+	fmt.Println("  rdxclaw migrate              Detect and migrate from a previous installation")
 	fmt.Println("  rdxclaw migrate --dry-run    Show what would be migrated")
-	fmt.Println("  rdxclaw migrate --refresh    Re-sync workspace files")
+	fmt.Println("  rdxclaw migrate --refresh    Re-sync workspace files from source")
 	fmt.Println("  rdxclaw migrate --force      Migrate without confirmation")
 }
 

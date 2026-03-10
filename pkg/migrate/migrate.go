@@ -68,7 +68,7 @@ func Run(opts Options) (*Result, error) {
 	}
 
 	if _, err := os.Stat(openclawHome); os.IsNotExist(err) {
-		return nil, fmt.Errorf("OpenClaw installation not found at %s", openclawHome)
+		return nil, fmt.Errorf("previous system installation not found at %s", openclawHome)
 	}
 
 	actions, warnings, err := Plan(opts, openclawHome, rdxclawHome)
@@ -76,7 +76,7 @@ func Run(opts Options) (*Result, error) {
 		return nil, err
 	}
 
-	fmt.Println("Migrating from OpenClaw to rdxclaw")
+	fmt.Println("Migrating from previous installation to rdxclaw")
 	fmt.Printf("  Source:      %s\n", openclawHome)
 	fmt.Printf("  Destination: %s\n", rdxclawHome)
 	fmt.Println()
@@ -118,7 +118,7 @@ func Plan(opts Options, openclawHome, rdxclawHome string) ([]Action, []string, e
 				Type:        ActionConvertConfig,
 				Source:      configPath,
 				Destination: filepath.Join(rdxclawHome, "config.json"),
-				Description: "convert OpenClaw config to rdxclaw format",
+				Description: "convert legacy config to rdxclaw format",
 			})
 
 			data, err := LoadOpenClawConfig(configPath)
@@ -140,7 +140,7 @@ func Plan(opts Options, openclawHome, rdxclawHome string) ([]Action, []string, e
 			}
 			actions = append(actions, wsActions...)
 		} else {
-			warnings = append(warnings, "OpenClaw workspace directory not found, skipping workspace migration")
+			warnings = append(warnings, "source workspace directory not found, skipping workspace migration")
 		}
 	}
 

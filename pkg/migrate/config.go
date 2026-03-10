@@ -44,12 +44,12 @@ func LoadOpenClawConfig(configPath string) (map[string]interface{}, error) {
 	// Gosec ignored: configPath is validated within findOpenClawConfig.
 	data, err := os.ReadFile(configPath) // #nosec G304
 	if err != nil {
-		return nil, fmt.Errorf("reading OpenClaw config: %w", err)
+		return nil, fmt.Errorf("reading legacy config: %w", err)
 	}
 
 	var raw map[string]interface{}
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, fmt.Errorf("parsing OpenClaw config: %w", err)
+		return nil, fmt.Errorf("parsing legacy config: %w", err)
 	}
 
 	converted := convertKeysToSnake(raw)

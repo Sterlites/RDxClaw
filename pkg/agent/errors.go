@@ -16,7 +16,7 @@ import (
 )
 
 // ErrorKind classifies LLM errors into recovery categories.
-// Inspired by OpenClaw's classifyFailoverReason for production-grade error handling.
+// RDxClaw's classification system for production-grade error handling.
 type ErrorKind int
 
 const (
@@ -60,8 +60,8 @@ func (k ErrorKind) String() string {
 // into an ErrorKind for routing to the appropriate recovery path.
 //
 // This replaces fragile inline string-matching scattered across the loop with a
-// single, centralised classification function inspired by OpenClaw's
-// classifyFailoverReason / isLikelyContextOverflowError patterns.
+// single, centralised classification function defined by RDxClaw's
+// standard error handling patterns.
 func classifyLLMError(err error) ErrorKind {
 	if err == nil {
 		return ErrUnknown
@@ -245,7 +245,7 @@ func sleepWithContext(ctx context.Context, d time.Duration) error {
 }
 
 // UsageAccumulator tracks cumulative token usage across all LLM calls within
-// a single request turn. Inspired by OpenClaw's UsageAccumulator which
+// a single request turn. RDxClaw's UsageAccumulator 
 // prevents inflated context-size reporting by separating accumulated totals
 // from per-call snapshots.
 type UsageAccumulator struct {
@@ -291,7 +291,6 @@ func truncateToolResult(content string) (string, bool) {
 
 // MaxOverflowCompactionAttempts is the maximum number of context overflow
 // recovery cycles (compaction + truncation) before giving up.
-// Mirrors OpenClaw's MAX_OVERFLOW_COMPACTION_ATTEMPTS = 3.
 const MaxOverflowCompactionAttempts = 3
 
 // MaxConsecutiveNudges is the maximum number of preamble/empty-response nudges

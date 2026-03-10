@@ -40,7 +40,7 @@ const maxToolResultBytesSubagent = 100 * 1024 // 100KB
 // RunToolLoop executes the LLM + tool call iteration loop.
 // This is the core agent logic that can be reused by both main agent and subagents.
 //
-// SoTA enhancements (inspired by OpenClaw):
+// SoTA enhancements:
 //   - Tool result size guards to prevent context blowout
 //   - Context cancellation checks between tool calls
 //   - Error classification for smarter retry decisions
