@@ -67,6 +67,7 @@ type AgentDefaults struct {
 	MaxTokens           int     `json:"max_tokens" env:"RDXCLAW_AGENTS_DEFAULTS_MAX_TOKENS"`
 	Temperature         float64 `json:"temperature" env:"RDXCLAW_AGENTS_DEFAULTS_TEMPERATURE"`
 	MaxToolIterations   int     `json:"max_tool_iterations" env:"RDXCLAW_AGENTS_DEFAULTS_MAX_TOOL_ITERATIONS"`
+	Timeout             int     `json:"timeout" env:"RDXCLAW_AGENTS_DEFAULTS_TIMEOUT"` // In seconds
 }
 
 type ChannelsConfig struct {
@@ -190,6 +191,7 @@ func DefaultConfig() *Config {
 				MaxTokens:           8192,
 				Temperature:         0.7,
 				MaxToolIterations:   20,
+				Timeout:             600,
 			},
 		},
 		Channels: ChannelsConfig{

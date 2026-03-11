@@ -27,9 +27,12 @@ type HTTPProvider struct {
 	httpClient *http.Client
 }
 
-func NewHTTPProvider(apiKey, apiBase, proxy string) *HTTPProvider {
+func NewHTTPProvider(apiKey, apiBase, proxy string, timeoutSeconds int) *HTTPProvider {
+	if timeoutSeconds <= 0 {
+		timeoutSeconds = 300 // Fallback to 5 minutes
+	}
 	client := &http.Client{
-		Timeout: 300 * time.Second, // 5 minutes to accommodate slow large models
+		Timeout: time.Duration(timeoutSeconds) * time.Second,
 	}
 
 	if proxy != "" {
@@ -426,5 +429,5 @@ func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 		return nil, fmt.Errorf("no API base configured for provider (model: %s)", model)
 	}
 
-	return NewHTTPProvider(apiKey, apiBase, proxy), nil
+	return NewHTTPProvider(apiKey, apiBase, proxy, cfg.Agents.Defaults.Timeout), nil
 }
