@@ -227,7 +227,7 @@ func (s *Server) handleChatCompletion(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		}
 
-		response, err := s.agentLoop.ProcessStreamWithChannel(ctx, userContent, sessionKey, channel, "api", sendChunk)
+		_, err := s.agentLoop.ProcessStreamWithChannel(ctx, userContent, sessionKey, channel, "api", sendChunk)
 		if err != nil {
 			s.recordEvent("agent", "error", fmt.Sprintf("Chat error: %v", err))
 			chunk := ChatCompletionResponse{
