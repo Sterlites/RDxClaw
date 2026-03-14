@@ -19,6 +19,7 @@ import (
 	"github.com/Sterlites/RDxClaw/pkg/logger"
 	"github.com/Sterlites/RDxClaw/pkg/state"
 	"github.com/Sterlites/RDxClaw/pkg/tools"
+	"github.com/Sterlites/RDxClaw/pkg/utils"
 )
 
 const (
@@ -92,7 +93,9 @@ func (hs *HeartbeatService) Start() error {
 	}
 
 	hs.stopChan = make(chan struct{})
-	go hs.runLoop(hs.stopChan)
+	utils.SafeGo("heartbeat", func() {
+		hs.runLoop(hs.stopChan)
+	})
 
 	logger.InfoCF("heartbeat", "Heartbeat service started", map[string]any{
 		"interval_minutes": hs.interval.Minutes(),

@@ -3,13 +3,16 @@ package swarm
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/Sterlites/RDxClaw/pkg/bus"
+	"github.com/Sterlites/RDxClaw/pkg/logger"
 	"github.com/Sterlites/RDxClaw/pkg/providers"
 	"github.com/Sterlites/RDxClaw/pkg/tools"
+	"github.com/Sterlites/RDxClaw/pkg/utils"
 )
 
 type SubagentTask struct {
@@ -85,9 +88,9 @@ func (sm *Manager) Spawn(ctx context.Context, task, label, originChannel, origin
 	sm.tasks[taskID] = subagentTask
 
 	// Start task in background
-	go func(tCtx context.Context) { // #nosec G118
+	utils.SafeGo("swarm", func() {
 		defer cancel() // Ensure cancellation function is called to release resources
-		result, err := sm.RunTask(tCtx, subagentTask)
+		result, err := sm.RunTask(taskCtx, subagentTask)
 
 		// Notify callback if present
 		if callback != nil {
@@ -108,7 +111,7 @@ func (sm *Manager) Spawn(ctx context.Context, task, label, originChannel, origin
 			defer cbCancel()
 			callback(cbCtx, toolResult)
 		}
-	}(taskCtx)
+	})
 
 	if label != "" {
 		return fmt.Sprintf("Spawned agent '%s' (ID: %s) for task: %s", label, taskID, task), nil
@@ -118,6 +121,17 @@ func (sm *Manager) Spawn(ctx context.Context, task, label, originChannel, origin
 
 // RunTask executes a task synchronously.
 func (sm *Manager) RunTask(ctx context.Context, task *SubagentTask) (*tools.ToolLoopResult, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			sm.mu.Lock()
+			task.Status = "failed"
+			task.Result = fmt.Sprintf("Panic: %v", r)
+			task.Finished = time.Now().UnixMilli()
+			sm.mu.Unlock()
+			logger.ErrorCF("swarm", "Panic in RunTask", map[string]any{"panic": r, "stack": string(debug.Stack())})
+		}
+	}()
+
 	defer func() {
 		sm.mu.Lock()
 		task.Finished = time.Now().UnixMilli()

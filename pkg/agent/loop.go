@@ -309,7 +309,7 @@ func (al *AgentLoop) recordTelemetry(sessionKey string, stats LatencyStats) {
 	al.overallCount++
 
 	// Atomic persistence for cross-restart data
-	go func() {
+	utils.SafeGo("agent", func() {
 		if err := al.state.UpdateGlobalTelemetry(
 			stats.TotalMS, stats.StartupMS, stats.ContextBuildMS,
 			stats.LLMCallsMS, stats.ToolExecMS, stats.ResponsePrepareMS,
@@ -317,7 +317,7 @@ func (al *AgentLoop) recordTelemetry(sessionKey string, stats LatencyStats) {
 		); err != nil {
 			logger.WarnCF("agent", "Failed to persist telemetry: %v", map[string]interface{}{"error": err.Error()})
 		}
-	}()
+	})
 }
 
 func (al *AgentLoop) GetTelemetry(sessionKey string) (last *LatencyStats, sessAvg AverageStats, overallAvg AverageStats) {
@@ -463,7 +463,7 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 	})
 }
 
-func (al *AgentLoop) processSystemMessage(ctx context.Context, msg bus.InboundMessage) (string, error) {
+func (al *AgentLoop) processSystemMessage(_ context.Context, msg bus.InboundMessage) (string, error) {
 	// Verify this is a system message
 	if msg.Channel != "system" {
 		return "", fmt.Errorf("processSystemMessage called with non-system message channel: %s", msg.Channel)
@@ -1191,7 +1191,7 @@ func (al *AgentLoop) maybeSummarize(sessionKey, channel, chatID string) {
 
 	if len(newHistory) > 20 || tokenEstimate > threshold {
 		if _, loading := al.summarizing.LoadOrStore(sessionKey, true); !loading {
-			go func() {
+			utils.SafeGo("agent", func() {
 				defer al.summarizing.Delete(sessionKey)
 				// Notify user about optimization if not an internal channel
 				if !constants.IsInternalChannel(channel) {
@@ -1202,7 +1202,7 @@ func (al *AgentLoop) maybeSummarize(sessionKey, channel, chatID string) {
 					})
 				}
 				al.summarizeSession(sessionKey)
-			}()
+			})
 		}
 	}
 }
@@ -1444,7 +1444,7 @@ func (al *AgentLoop) estimateTokens(messages []providers.Message) int {
 	return totalChars * 2 / 5
 }
 
-func (al *AgentLoop) handleCommand(ctx context.Context, msg bus.InboundMessage) (string, bool) {
+func (al *AgentLoop) handleCommand(_ context.Context, msg bus.InboundMessage) (string, bool) {
 	content := strings.TrimSpace(msg.Content)
 	if !strings.HasPrefix(content, "/") {
 		return "", false
@@ -1538,6 +1538,15 @@ func (al *AgentLoop) startHeartbeat(ctx context.Context, callback func(string), 
 	done := make(chan struct{})
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.ErrorCF("agent", "Recovered from panic in heartbeat goroutine",
+					map[string]any{
+						"panic": r,
+					})
+			}
+		}()
+
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
 
