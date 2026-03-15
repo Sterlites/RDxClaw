@@ -210,23 +210,11 @@ func RunToolLoop(ctx context.Context, config ToolLoopConfig, messages []provider
 
 			// Execute tool
 			var toolResult *ToolResult
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						logger.ErrorCF("toolloop", "Panic during tool execution",
-							map[string]any{
-								"tool":  tc.Name,
-								"panic": r,
-							})
-						toolResult = ErrorResult(fmt.Sprintf("Tool %q panicked", tc.Name))
-					}
-				}()
-				if config.Tools != nil {
-					toolResult = config.Tools.ExecuteWithContext(ctx, tc.Name, tc.Arguments, channel, chatID, nil)
-				} else {
-					toolResult = ErrorResult("No tools available")
-				}
-			}()
+			if config.Tools != nil {
+				toolResult = config.Tools.ExecuteWithContext(ctx, tc.Name, tc.Arguments, channel, chatID, nil)
+			} else {
+				toolResult = ErrorResult("No tools available")
+			}
 
 			// Determine content for LLM
 			contentForLLM := toolResult.ForLLM

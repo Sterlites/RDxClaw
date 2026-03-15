@@ -140,7 +140,6 @@ func (s *Server) Start() error {
 	}
 
 	handler = AuthMiddleware(s.config.APIKey, handler)
-	handler = RecoveryMiddleware(handler)
 
 	addr := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
 	slog.Info("API server starting", "addr", addr)
@@ -750,25 +749,5 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 			Type:    "api_error",
 			Code:    code,
 		},
-	})
-}
-
-// RecoveryMiddleware recovers from panics in handlers.
-func RecoveryMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			if err := recover(); err != nil {
-				stack := make([]byte, 1024)
-				length := runtime.Stack(stack, false)
-				slog.Error("API panic recovered",
-					"error", err,
-					"stack", string(stack[:length]),
-					"method", r.Method,
-					"path", r.URL.Path,
-				)
-				writeError(w, http.StatusInternalServerError, "internal_error", "An internal error occurred")
-			}
-		}()
-		next.ServeHTTP(w, r)
 	})
 }
