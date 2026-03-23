@@ -2,11 +2,13 @@ package swarm
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/Sterlites/RDxClaw/pkg/bus"
 	"github.com/Sterlites/RDxClaw/pkg/providers"
+	"github.com/Sterlites/RDxClaw/pkg/tools"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -87,4 +89,132 @@ func TestManager_Kill(t *testing.T) {
 
 	agent, _ := manager.GetAgent(agentID)
 	assert.Equal(t, "cancelled", agent.Status)
+}
+
+// FailingMockProvider always returns an error (simulates 504 Gateway Timeout)
+type FailingMockProvider struct{}
+
+func (m *FailingMockProvider) Chat(ctx context.Context, messages []providers.Message, tools []providers.ToolDefinition, model string, options map[string]any) (*providers.LLMResponse, error) {
+	return nil, fmt.Errorf("API request failed: Status: 504")
+}
+
+func (m *FailingMockProvider) GetDefaultModel() string {
+	return "test-model"
+}
+
+func (m *FailingMockProvider) EstimateTokens(messages []providers.Message) int {
+	return 100
+}
+
+// TestManager_SpawnWithError verifies that when RunToolLoop returns an error (nil result),
+// the Spawn goroutine doesn't panic and correctly marks the task as failed.
+func TestManager_SpawnWithError(t *testing.T) {
+	msgBus := bus.NewMessageBus()
+	provider := &FailingMockProvider{}
+	manager := NewManager(provider, "test-model", "/tmp", msgBus)
+
+	ctx := context.Background()
+
+	callbackCalled := make(chan *tools.ToolResult, 1)
+	callback := func(ctx context.Context, result *tools.ToolResult) {
+		callbackCalled <- result
+	}
+
+	msg, err := manager.Spawn(ctx, "Test failing task", "fail-agent", "test-channel", "test-chat", callback)
+	assert.NoError(t, err)
+	assert.Contains(t, msg, "Spawned agent 'fail-agent'")
+
+	// Wait for agent to finish
+	maxWait := 10
+	agentID := "agent-1"
+	for i := 0; i < maxWait; i++ {
+		agent, _ := manager.GetAgent(agentID)
+		if agent.Status != "running" {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Verify task is marked as failed, not crashed
+	agent, ok := manager.GetAgent(agentID)
+	assert.True(t, ok)
+	assert.Equal(t, "failed", agent.Status)
+	assert.Contains(t, agent.Result, "Error:")
+	assert.True(t, agent.Finished > 0)
+
+	// Verify callback was called with error
+	select {
+	case result := <-callbackCalled:
+		assert.True(t, result.IsError)
+		assert.NotNil(t, result.Err)
+		assert.Contains(t, result.ForLLM, "Agent failed")
+	case <-time.After(2 * time.Second):
+		t.Fatal("Callback was not called within timeout")
+	}
+}
+
+// PanickingMockProvider panics during Chat (simulates unexpected crash)
+type PanickingMockProvider struct{}
+
+func (m *PanickingMockProvider) Chat(ctx context.Context, messages []providers.Message, tools []providers.ToolDefinition, model string, options map[string]any) (*providers.LLMResponse, error) {
+	panic("unexpected nil pointer in provider")
+}
+
+func (m *PanickingMockProvider) GetDefaultModel() string {
+	return "test-model"
+}
+
+func (m *PanickingMockProvider) EstimateTokens(messages []providers.Message) int {
+	return 100
+}
+
+// TestManager_PanicRecovery verifies that a panic during task execution is
+// caught and the task is marked as failed instead of crashing the server.
+func TestManager_PanicRecovery(t *testing.T) {
+	msgBus := bus.NewMessageBus()
+	provider := &PanickingMockProvider{}
+	manager := NewManager(provider, "test-model", "/tmp", msgBus)
+
+	ctx := context.Background()
+
+	callbackCalled := make(chan *tools.ToolResult, 1)
+	callback := func(ctx context.Context, result *tools.ToolResult) {
+		callbackCalled <- result
+	}
+
+	msg, err := manager.Spawn(ctx, "Panicking task", "panic-agent", "test-channel", "test-chat", callback)
+	assert.NoError(t, err)
+	assert.Contains(t, msg, "Spawned agent 'panic-agent'")
+
+	agentID := "agent-1"
+
+	// Wait for agent to finish (should recover from panic, not crash)
+	maxWait := 10
+	for i := 0; i < maxWait; i++ {
+		agent, _ := manager.GetAgent(agentID)
+		if agent.Status != "running" {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Verify task is marked as failed, NOT that the process crashed
+	agent, ok := manager.GetAgent(agentID)
+	assert.True(t, ok)
+	assert.Equal(t, "failed", agent.Status)
+	assert.Contains(t, agent.Result, "panic")
+	assert.True(t, agent.Finished > 0)
+
+	// Verify callback was called with error
+	select {
+	case result := <-callbackCalled:
+		assert.True(t, result.IsError)
+	case <-time.After(2 * time.Second):
+		t.Fatal("Callback was not called within timeout after panic recovery")
+	}
+
+	// Verify the manager is still functional (can spawn more agents)
+	msg2, err2 := manager.Spawn(ctx, "Post-panic task", "survivor", "ch", "chat", nil)
+	assert.NoError(t, err2)
+	assert.Contains(t, msg2, "Spawned agent 'survivor'")
 }

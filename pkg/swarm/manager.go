@@ -87,19 +87,45 @@ func (sm *Manager) Spawn(ctx context.Context, task, label, originChannel, origin
 	// Start task in background
 	go func(tCtx context.Context) { // #nosec G118
 		defer cancel() // Ensure cancellation function is called to release resources
+
+		// Recover from any panics to prevent crashing the entire server
+		defer func() {
+			if r := recover(); r != nil {
+				errMsg := fmt.Sprintf("Spawn goroutine panic recovered: %v", r)
+				sm.mu.Lock()
+				subagentTask.Status = "failed"
+				subagentTask.Result = errMsg
+				subagentTask.Finished = time.Now().UnixMilli()
+				sm.mu.Unlock()
+
+				if callback != nil {
+					cbCtx, cbCancel := context.WithTimeout(context.Background(), 10*time.Second) // #nosec G118
+					defer cbCancel()
+					callback(cbCtx, &tools.ToolResult{
+						IsError: true,
+						Err:     fmt.Errorf("%s", errMsg),
+						ForLLM:  fmt.Sprintf("Agent panicked: %v", r),
+					})
+				}
+			}
+		}()
+
 		result, err := sm.RunTask(tCtx, subagentTask)
 
 		// Notify callback if present
 		if callback != nil {
-			toolResult := &tools.ToolResult{
-				ForUser: result.Content,
-			}
+			var toolResult *tools.ToolResult
 			if err != nil {
-				toolResult.IsError = true
-				toolResult.Err = err
-				toolResult.ForLLM = fmt.Sprintf("Agent failed: %v", err)
+				toolResult = &tools.ToolResult{
+					IsError: true,
+					Err:     err,
+					ForLLM:  fmt.Sprintf("Agent failed: %v", err),
+				}
 			} else {
-				toolResult.ForLLM = fmt.Sprintf("Agent completed: %s", result.Content)
+				toolResult = &tools.ToolResult{
+					ForUser: result.Content,
+					ForLLM:  fmt.Sprintf("Agent completed: %s", result.Content),
+				}
 			}
 			// Use a shorter-lived context for the callback execution.
 			// Gosec ignored: using Background because this is a post-task notification
@@ -117,7 +143,7 @@ func (sm *Manager) Spawn(ctx context.Context, task, label, originChannel, origin
 }
 
 // RunTask executes a task synchronously.
-func (sm *Manager) RunTask(ctx context.Context, task *SubagentTask) (*tools.ToolLoopResult, error) {
+func (sm *Manager) RunTask(ctx context.Context, task *SubagentTask) (loopResult *tools.ToolLoopResult, err error) {
 	defer func() {
 		sm.mu.Lock()
 		task.Finished = time.Now().UnixMilli()
@@ -125,6 +151,18 @@ func (sm *Manager) RunTask(ctx context.Context, task *SubagentTask) (*tools.Tool
 			task.Status = "completed"
 		}
 		sm.mu.Unlock()
+	}()
+
+	// Recover from panics during task execution, converting them to errors
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("task panic recovered: %v", r)
+			loopResult = &tools.ToolLoopResult{Content: err.Error()}
+			sm.mu.Lock()
+			task.Status = "failed"
+			task.Result = err.Error()
+			sm.mu.Unlock()
+		}
 	}()
 
 	// Build system prompt for subagent
@@ -150,7 +188,7 @@ When finished, provide a clear summary of your work.`
 	maxIter := sm.maxIterations
 	sm.mu.RUnlock()
 
-	loopResult, err := tools.RunToolLoop(ctx, tools.ToolLoopConfig{
+	loopResult, err = tools.RunToolLoop(ctx, tools.ToolLoopConfig{
 		Provider:      sm.provider,
 		Model:         sm.defaultModel,
 		Tools:         registry,

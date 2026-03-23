@@ -118,6 +118,7 @@ func RunToolLoop(ctx context.Context, config ToolLoopConfig, messages []provider
 			errMsg := strings.ToLower(err.Error())
 			isTransient := strings.Contains(errMsg, "503") ||
 				strings.Contains(errMsg, "502") ||
+				strings.Contains(errMsg, "504") ||
 				strings.Contains(errMsg, "overloaded") ||
 				strings.Contains(errMsg, "rate limit") ||
 				strings.Contains(errMsg, "429") ||
