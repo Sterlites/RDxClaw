@@ -60,14 +60,14 @@ type AgentsConfig struct {
 }
 
 type AgentDefaults struct {
-	Workspace           string  `json:"workspace" env:"RDXCLAW_AGENTS_DEFAULTS_WORKSPACE"`
-	RestrictToWorkspace bool    `json:"restrict_to_workspace" env:"RDXCLAW_AGENTS_DEFAULTS_RESTRICT_TO_WORKSPACE"`
-	Provider            string  `json:"provider" env:"RDXCLAW_AGENTS_DEFAULTS_PROVIDER"`
-	Model               string  `json:"model" env:"RDXCLAW_AGENTS_DEFAULTS_MODEL"`
-	MaxTokens           int     `json:"max_tokens" env:"RDXCLAW_AGENTS_DEFAULTS_MAX_TOKENS"`
-	Temperature         float64 `json:"temperature" env:"RDXCLAW_AGENTS_DEFAULTS_TEMPERATURE"`
-	MaxToolIterations   int     `json:"max_tool_iterations" env:"RDXCLAW_AGENTS_DEFAULTS_MAX_TOOL_ITERATIONS"`
-	Timeout             int     `json:"timeout" env:"RDXCLAW_AGENTS_DEFAULTS_TIMEOUT"` // In seconds
+	Workspace           string  `json:"workspace" env:"RDXCLAW_WORKSPACE"`
+	RestrictToWorkspace bool    `json:"restrict_to_workspace" env:"RDXCLAW_RESTRICT_TO_WORKSPACE"`
+	Provider            string  `json:"provider" env:"RDXCLAW_PROVIDER"`
+	Model               string  `json:"model" env:"RDXCLAW_MODEL"`
+	MaxTokens           int     `json:"max_tokens" env:"RDXCLAW_MAX_TOKENS"`
+	Temperature         float64 `json:"temperature" env:"RDXCLAW_TEMPERATURE"`
+	MaxToolIterations   int     `json:"max_tool_iterations" env:"RDXCLAW_MAX_TOOL_ITERATIONS"`
+	Timeout             int     `json:"timeout" env:"RDXCLAW_TIMEOUT"` // In seconds
 }
 
 type ChannelsConfig struct {
@@ -125,25 +125,25 @@ type DevicesConfig struct {
 }
 
 type ProvidersConfig struct {
-	Anthropic     ProviderConfig `json:"anthropic"`
-	OpenAI        ProviderConfig `json:"openai"`
-	OpenRouter    ProviderConfig `json:"openrouter"`
-	Groq          ProviderConfig `json:"groq"`
-	VLLM          ProviderConfig `json:"vllm"`
-	Gemini        ProviderConfig `json:"gemini"`
-	Nvidia        ProviderConfig `json:"nvidia"`
-	Ollama        ProviderConfig `json:"ollama"`
-	DeepSeek      ProviderConfig `json:"deepseek"`
-	GitHubCopilot ProviderConfig `json:"github_copilot"`
-	ShengSuanYun  ProviderConfig `json:"shengsuanyun"`
+	Anthropic     ProviderConfig `json:"anthropic" envPrefix:"RDXCLAW_ANTHROPIC_"`
+	OpenAI        ProviderConfig `json:"openai" envPrefix:"RDXCLAW_OPENAI_"`
+	OpenRouter    ProviderConfig `json:"openrouter" envPrefix:"RDXCLAW_OPENROUTER_"`
+	Groq          ProviderConfig `json:"groq" envPrefix:"RDXCLAW_GROQ_"`
+	VLLM          ProviderConfig `json:"vllm" envPrefix:"RDXCLAW_VLLM_"`
+	Gemini        ProviderConfig `json:"gemini" envPrefix:"RDXCLAW_GEMINI_"`
+	Nvidia        ProviderConfig `json:"nvidia" envPrefix:"RDXCLAW_NVIDIA_"`
+	Ollama        ProviderConfig `json:"ollama" envPrefix:"RDXCLAW_OLLAMA_"`
+	DeepSeek      ProviderConfig `json:"deepseek" envPrefix:"RDXCLAW_DEEPSEEK_"`
+	GitHubCopilot ProviderConfig `json:"github_copilot" envPrefix:"RDXCLAW_GITHUB_COPILOT_"`
+	ShengSuanYun  ProviderConfig `json:"shengsuanyun" envPrefix:"RDXCLAW_SHENGSUANYUN_"`
 }
 
 type ProviderConfig struct {
-	APIKey      string `json:"api_key" env:"RDXCLAW_PROVIDERS_{{.Name}}_API_KEY"`
-	APIBase     string `json:"api_base" env:"RDXCLAW_PROVIDERS_{{.Name}}_API_BASE"`
-	Proxy       string `json:"proxy,omitempty" env:"RDXCLAW_PROVIDERS_{{.Name}}_PROXY"`
-	AuthMethod  string `json:"auth_method,omitempty" env:"RDXCLAW_PROVIDERS_{{.Name}}_AUTH_METHOD"`
-	ConnectMode string `json:"connect_mode,omitempty" env:"RDXCLAW_PROVIDERS_{{.Name}}_CONNECT_MODE"` //only for Github Copilot, `stdio` or `grpc`
+	APIKey      string `json:"api_key" env:"API_KEY"`
+	APIBase     string `json:"api_base" env:"API_BASE"`
+	Proxy       string `json:"proxy,omitempty" env:"PROXY"`
+	AuthMethod  string `json:"auth_method,omitempty" env:"AUTH_METHOD"`
+	ConnectMode string `json:"connect_mode,omitempty" env:"CONNECT_MODE"` //only for Github Copilot, `stdio` or `grpc`
 }
 
 type GatewayConfig struct {
@@ -155,7 +155,7 @@ type APIConfig struct {
 	Enabled     bool                `json:"enabled" env:"RDXCLAW_API_ENABLED"`
 	Host        string              `json:"host" env:"RDXCLAW_API_HOST"`
 	Port        int                 `json:"port" env:"RDXCLAW_API_PORT"`
-	APIKey      string              `json:"api_key" env:"RDXCLAW_API_KEY"`
+	APIKey      string              `json:"api_key" env:"RDXCLAW_SERVER_API_KEY"`
 	RateLimit   int                 `json:"rate_limit" env:"RDXCLAW_API_RATE_LIMIT"` // requests per minute
 	CORSOrigins FlexibleStringSlice `json:"cors_origins" env:"RDXCLAW_API_CORS_ORIGINS"`
 }
@@ -278,12 +278,11 @@ func LoadConfig(path string) (*Config, error) {
 	data, err := os.ReadFile(path) // #nosec G304
 	if err != nil {
 		if os.IsNotExist(err) {
-			return cfg, nil
+			// If file doesn't exist, we still want to parse env vars
+		} else {
+			return nil, err
 		}
-		return nil, err
-	}
-
-	if err := json.Unmarshal(data, cfg); err != nil {
+	} else if err := json.Unmarshal(data, cfg); err != nil {
 		return nil, err
 	}
 
@@ -291,7 +290,59 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, err
 	}
 
+	// Handle global RDXCLAW_API_KEY / RDXCLAW_APIBASE overrides for the active provider
+	globalKey := os.Getenv("RDXCLAW_API_KEY")
+	globalBase := os.Getenv("RDXCLAW_APIBASE")
+
+	if globalKey != "" || globalBase != "" {
+		provider := cfg.Agents.Defaults.Provider
+		if provider == "" {
+			provider = "openai" // default fallback
+		}
+
+		// Apply overrides to the active provider configuration
+		updateProviderConfig(cfg, provider, globalKey, globalBase)
+	}
+
 	return cfg, nil
+}
+
+func updateProviderConfig(cfg *Config, providerName string, key string, base string) {
+	var target *ProviderConfig
+
+	switch providerName {
+	case "anthropic":
+		target = &cfg.Providers.Anthropic
+	case "openai":
+		target = &cfg.Providers.OpenAI
+	case "openrouter":
+		target = &cfg.Providers.OpenRouter
+	case "groq":
+		target = &cfg.Providers.Groq
+	case "vllm":
+		target = &cfg.Providers.VLLM
+	case "gemini":
+		target = &cfg.Providers.Gemini
+	case "nvidia":
+		target = &cfg.Providers.Nvidia
+	case "ollama":
+		target = &cfg.Providers.Ollama
+	case "deepseek":
+		target = &cfg.Providers.DeepSeek
+	case "github_copilot":
+		target = &cfg.Providers.GitHubCopilot
+	case "shengsuanyun":
+		target = &cfg.Providers.ShengSuanYun
+	}
+
+	if target != nil {
+		if key != "" {
+			target.APIKey = key
+		}
+		if base != "" {
+			target.APIBase = base
+		}
+	}
 }
 
 func SaveConfig(path string, cfg *Config) error {
