@@ -198,6 +198,9 @@ async function loadStatus() {
   const data = await fetchJSON(`/status?session_key=${SESSION_ID}`);
   if (!data) return;
 
+  // Connection successful - hide auth if showing
+  document.getElementById('authOverlay').classList.remove('active');
+
   // Real-time Clock
   const clockEl = document.getElementById('systemClock');
   if (clockEl) {
