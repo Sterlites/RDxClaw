@@ -103,7 +103,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
-          envs: RDXCLAW_PROVIDER,RDXCLAW_API_KEY,RDXCLAW_MODEL
+          envs: RDXCLAW_PROVIDER,RDXCLAW_API_KEY,RDXCLAW_MODEL,RDXCLAW_SERVER_API_KEY
           script: |
             set -e
             # Write env file from CI secrets
@@ -112,6 +112,7 @@ jobs:
             RDXCLAW_PROVIDER=$RDXCLAW_PROVIDER
             RDXCLAW_API_KEY=$RDXCLAW_API_KEY
             RDXCLAW_MODEL=$RDXCLAW_MODEL
+            RDXCLAW_SERVER_API_KEY=$RDXCLAW_SERVER_API_KEY
             ENVEOF
             chmod 600 ~/.rdxclaw/env
 
@@ -124,6 +125,7 @@ jobs:
           RDXCLAW_PROVIDER: ${{ secrets.RDXCLAW_PROVIDER }}
           RDXCLAW_API_KEY: ${{ secrets.RDXCLAW_API_KEY }}
           RDXCLAW_MODEL: ${{ secrets.RDXCLAW_MODEL }}
+          RDXCLAW_SERVER_API_KEY: ${{ secrets.RDXCLAW_SERVER_API_KEY }}
 
   notify:
     name: Notify
