@@ -73,33 +73,43 @@ RDxClaw includes a high-performance, matrix-themed **Mission Control** dashboard
 
 ## 🛠️ Mission Control Setup & Access
 
-### 1. Start the Mission Control Server
+### 1. Configuration (Required)
+Before starting the server, you must set an API key. This acts as the master password for your Mission Control dashboard to protect your local files and agents.
+Copy the example environment file:
+```bash
+cp .env.example .env
+```
+Open `.env` and set `RDXCLAW_SERVER_API_KEY="your_secure_password"`.
+
+### 2. Start the Server
 Run the following command to start the backend engine and host the dashboard:
 
 ```bash
-rdxclaw server --port 8080 --api-key YOUR_SECRET_KEY
+rdxclaw server --port 8080
 ```
 
 > [!TIP]
-> You can also configure the environment via variables:
+> You can also configure the environment via terminal variables instead of `.env`:
 > `export RDXCLAW_PORT=8080`
-> `export RDXCLAW_API_KEY=YOUR_SECRET_KEY`
+> `export RDXCLAW_SERVER_API_KEY=your_secure_password`
 > `export RDXCLAW_PROVIDER=anthropic|google|openai|nvidia`
+> `export RDXCLAW_API_KEY=YOUR_AI_API_KEY`
 > `export RDXCLAW_MODEL=your-preferred-model`
 
-### 2. Access the Dashboard
+### 3. Access the Dashboard
 Open your favorite browser and navigate to:
 **`http://localhost:8080`**
 
-### 3. Establish Uplink
-Upon first access, Mission Control will prompt for your **API Key**. Enter the key you used in Step 1 to securely connect to the heart of the engine.
+### 4. Establish Uplink
+Upon first access, Mission Control will show an **ACCESS_RESTRICTED** popup. Enter the exact same password you set for `RDXCLAW_SERVER_API_KEY` in Step 1. Your browser will save this key and securely authenticate you for all future requests.
 
-### 4. GitHub Users: Running from Source
+### 5. GitHub Users: Running from Source
 If you are developing or running from the repository:
 1. Ensure you have **Go 1.21+** installed.
 2. Clone the repo: `git clone https://github.com/Sterlites/RDxClaw.git`
-3. Build the binary: `make build`
-4. Run the server: `./build/rdxclaw server --port 8080`
+3. Configure `.env` as shown in Step 1.
+4. Build the binary: `make build`
+5. Run the server: `./build/rdxclaw server --port 8080`
 
 ---
 
