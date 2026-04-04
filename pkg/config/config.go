@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/caarlos0/env/v11"
+	"github.com/joho/godotenv"
 )
 
 // FlexibleStringSlice is a []string that also accepts JSON numbers,
@@ -272,6 +273,15 @@ func DefaultConfig() *Config {
 }
 
 func LoadConfig(path string) (*Config, error) {
+	// Attempt to load environment variables from file first for seamless experience
+	// Load from current dir .env or home dir config env
+	_ = godotenv.Load() // Loads .env from current dir if exists
+	home, err := os.UserHomeDir()
+	if err == nil {
+		envPath := filepath.Join(home, ".rdxclaw", "env")
+		_ = godotenv.Load(envPath)
+	}
+
 	cfg := DefaultConfig()
 
 	// Gosec ignored: path is the application config path.
