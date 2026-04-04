@@ -294,6 +294,12 @@ func LoadConfig(path string) (*Config, error) {
 	globalKey := os.Getenv("RDXCLAW_API_KEY")
 	globalBase := os.Getenv("RDXCLAW_APIBASE")
 
+	// Fallback for server API key: if RDXCLAW_SERVER_API_KEY is not set, 
+	// use RDXCLAW_API_KEY (seamless experience for single-key setups)
+	if cfg.API.APIKey == "" && globalKey != "" {
+		cfg.API.APIKey = globalKey
+	}
+
 	if globalKey != "" || globalBase != "" {
 		provider := cfg.Agents.Defaults.Provider
 		if provider == "" {

@@ -22,7 +22,7 @@ func AuthMiddleware(apiKey string, next http.Handler) http.Handler {
 
 		if apiKey == "" {
 			// No API key configured — for security, block all non-public requests
-			writeError(w, http.StatusUnauthorized, "api_key_not_set", "API key is not configured on server. Please set RDXCLAW_API_KEY.")
+			writeError(w, http.StatusUnauthorized, "api_key_not_set", "API key is not configured on server. Please set RDXCLAW_SERVER_API_KEY or RDXCLAW_API_KEY.")
 			return
 		}
 
