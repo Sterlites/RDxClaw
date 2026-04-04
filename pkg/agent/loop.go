@@ -34,7 +34,10 @@ import (
 
 type AgentLoop struct {
 	bus            *bus.MessageBus
+	providerMu     sync.RWMutex
 	provider       providers.LLMProvider
+	cfg            *config.Config
+	fallbackIndex  int
 	workspace      string
 	model          string
 	maxTokens      int
@@ -199,6 +202,8 @@ func NewAgentLoop(cfg *config.Config, msgBus *bus.MessageBus, provider providers
 	al := &AgentLoop{
 		bus:            msgBus,
 		provider:       provider,
+		cfg:            cfg,
+		fallbackIndex:  -1,
 		workspace:      workspace,
 		model:          cfg.Agents.Defaults.Model,
 		maxTokens:      cfg.Agents.Defaults.MaxTokens,
@@ -635,6 +640,84 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, opts processOptions) (str
 	return finalContent, nil
 }
 
+func (al *AgentLoop) rotateProvider(ctx context.Context, channel, chatID string) bool {
+	al.providerMu.Lock()
+	defer al.providerMu.Unlock()
+
+	fallbacks := al.cfg.Agents.Defaults.Fallbacks
+	if len(fallbacks) == 0 {
+		return false
+	}
+
+	nextIndex := al.fallbackIndex + 1
+	if nextIndex >= len(fallbacks) {
+		return false // completely exhausted all fallbacks
+	}
+
+	fallback := fallbacks[nextIndex]
+
+	// Create a deep copy of config using JSON
+	cfgData, _ := json.Marshal(al.cfg)
+	var tempCfg config.Config
+	_ = json.Unmarshal(cfgData, &tempCfg)
+
+	// Override specific fields needed for the fallback
+	tempCfg.Agents.Defaults.Provider = fallback.Provider
+	tempCfg.Agents.Defaults.Model = fallback.Model
+
+	// Determine which provider to update
+	switch strings.ToLower(fallback.Provider) {
+	case "openai", "gpt":
+		if fallback.APIKey != "" { tempCfg.Providers.OpenAI.APIKey = fallback.APIKey }
+		if fallback.APIBase != "" { tempCfg.Providers.OpenAI.APIBase = fallback.APIBase }
+	case "anthropic", "claude":
+		if fallback.APIKey != "" { tempCfg.Providers.Anthropic.APIKey = fallback.APIKey }
+		if fallback.APIBase != "" { tempCfg.Providers.Anthropic.APIBase = fallback.APIBase }
+	case "gemini", "google":
+		if fallback.APIKey != "" { tempCfg.Providers.Gemini.APIKey = fallback.APIKey }
+		if fallback.APIBase != "" { tempCfg.Providers.Gemini.APIBase = fallback.APIBase }
+	case "groq":
+		if fallback.APIKey != "" { tempCfg.Providers.Groq.APIKey = fallback.APIKey }
+		if fallback.APIBase != "" { tempCfg.Providers.Groq.APIBase = fallback.APIBase }
+	case "openrouter":
+		if fallback.APIKey != "" { tempCfg.Providers.OpenRouter.APIKey = fallback.APIKey }
+		if fallback.APIBase != "" { tempCfg.Providers.OpenRouter.APIBase = fallback.APIBase }
+	case "vllm":
+		if fallback.APIKey != "" { tempCfg.Providers.VLLM.APIKey = fallback.APIKey }
+		if fallback.APIBase != "" { tempCfg.Providers.VLLM.APIBase = fallback.APIBase }
+	case "deepseek":
+		if fallback.APIKey != "" { tempCfg.Providers.DeepSeek.APIKey = fallback.APIKey }
+		if fallback.APIBase != "" { tempCfg.Providers.DeepSeek.APIBase = fallback.APIBase }
+	case "nvidia":
+		if fallback.APIKey != "" { tempCfg.Providers.Nvidia.APIKey = fallback.APIKey }
+		if fallback.APIBase != "" { tempCfg.Providers.Nvidia.APIBase = fallback.APIBase }
+	}
+
+	newProvider, err := providers.CreateProvider(&tempCfg)
+	if err != nil {
+		logger.ErrorCF("agent", "Failed to construct fallback provider", map[string]interface{}{"error": err.Error(), "provider": fallback.Provider})
+		return false
+	}
+
+	al.provider = newProvider
+	al.model = fallback.Model
+	al.fallbackIndex = nextIndex
+
+	logger.WarnCF("agent", "Rotated provider due to quota limits", map[string]interface{}{
+		"new_provider": fallback.Provider,
+		"new_model":    fallback.Model,
+	})
+
+	// Notify Mission Control
+	al.bus.PublishOutbound(bus.OutboundMessage{
+		Channel: "system",
+		ChatID:  "logs",
+		Content: fmt.Sprintf("⚠️ Quota exhausted. Automatically switching to fallback provider: %s (%s)", fallback.Provider, fallback.Model),
+	})
+
+	return true
+}
+
 // runLLMIteration executes the LLM call loop with tool handling.
 // Returns the final content, iteration count, LLM time, tool time, turn stats, and any error.
 //
@@ -736,7 +819,12 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 		for retry := 0; retry <= maxRetries; retry++ {
 			// Call LLM with heartbeat for user feedback
 			stopHeartbeat := al.startHeartbeat(ctx, opts.StreamCallback, "thinking")
-			response, err = al.provider.Chat(ctx, messages, providerToolDefs, al.model, map[string]interface{}{
+			al.providerMu.RLock()
+			currentProvider := al.provider
+			currentModel := al.model
+			al.providerMu.RUnlock()
+
+			response, err = currentProvider.Chat(ctx, messages, providerToolDefs, currentModel, map[string]interface{}{
 				"max_tokens":  al.maxTokens,
 				"temperature": al.temperature,
 			})
@@ -813,6 +901,23 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 					opts.ChatID,
 				)
 				continue
+			}
+
+			// ── Quota Exceeded: provider fallback rotation ──
+			if errKind == ErrQuotaExceeded {
+				if al.rotateProvider(ctx, opts.Channel, opts.ChatID) {
+					// We successfully rotated the provider, so we can immediately retry
+					logger.WarnCF("agent", "Retrying with new fallback provider", map[string]interface{}{
+						"iteration": iteration,
+						"retry":     retry,
+					})
+					continue
+				}
+				// If rotation failed or exhausted, we treat it as fatal and break
+				logger.ErrorCF("agent", "Quota exceeded and fallback rotation failed or exhausted", map[string]interface{}{
+					"error": err.Error(),
+				})
+				break
 			}
 
 			// ── Rate limit / Transient: exponential backoff ──

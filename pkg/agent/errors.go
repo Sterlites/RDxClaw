@@ -26,6 +26,8 @@ const (
 	ErrContextOverflow
 	// ErrRateLimit means the provider is throttling requests.
 	ErrRateLimit
+	// ErrQuotaExceeded means the active key or account has run out of credits.
+	ErrQuotaExceeded
 	// ErrTimeout means the request timed out (network or model-side).
 	ErrTimeout
 	// ErrAuth means authentication/authorization failed.
@@ -43,6 +45,8 @@ func (k ErrorKind) String() string {
 		return "context_overflow"
 	case ErrRateLimit:
 		return "rate_limit"
+	case ErrQuotaExceeded:
+		return "quota_exceeded"
 	case ErrTimeout:
 		return "timeout"
 	case ErrAuth:
@@ -96,13 +100,27 @@ func classifyLLMError(err error) ErrorKind {
 		}
 	}
 
+	// --- Quota Exceeded ---
+	quotaPatterns := []string{
+		"insufficient_quota",
+		"quota exceeded",
+		"out of credits",
+		"billing",
+		"payment required",
+		"402",
+	}
+	for _, p := range quotaPatterns {
+		if strings.Contains(msg, p) {
+			return ErrQuotaExceeded
+		}
+	}
+
 	// --- Rate limiting ---
 	rateLimitPatterns := []string{
 		"rate limit",
 		"rate_limit",
 		"too many requests",
 		"429",
-		"quota exceeded",
 		"throttl",
 	}
 	for _, p := range rateLimitPatterns {

@@ -118,6 +118,7 @@ If you are developing or running from the repository:
 *   🪶 **Industrial Efficiency**: <10MB RAM footprint for high-density deployments.
 *   ⚡️ **Lightning Fast**: 1-second startup for instant-on automation.
 *   🔒 **Sandboxed Execution**: Strict workspace restrictions for secure tool use.
+*   ♾️ **Quota Resilience**: Auto-Provider Fallbacks seamlessly catch rate limits/quota exhaustion and instantly swap API keys mid-task without context loss.
 *   🌍 **Universal Portability**: Single binary for x86, ARM, and RISC-V. One command to Go!
 
 | Feature                       | RDxClaw (Industrial)                      | Traditional Frameworks (Heavy)            |

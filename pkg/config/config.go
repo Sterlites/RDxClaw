@@ -61,15 +61,23 @@ type AgentsConfig struct {
 	Defaults AgentDefaults `json:"defaults"`
 }
 
+type FallbackConfig struct {
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
+	APIKey   string `json:"api_key,omitempty"`
+	APIBase  string `json:"api_base,omitempty"`
+}
+
 type AgentDefaults struct {
-	Workspace           string  `json:"workspace" env:"RDXCLAW_WORKSPACE"`
-	RestrictToWorkspace bool    `json:"restrict_to_workspace" env:"RDXCLAW_RESTRICT_TO_WORKSPACE"`
-	Provider            string  `json:"provider" env:"RDXCLAW_PROVIDER"`
-	Model               string  `json:"model" env:"RDXCLAW_MODEL"`
-	MaxTokens           int     `json:"max_tokens" env:"RDXCLAW_MAX_TOKENS"`
-	Temperature         float64 `json:"temperature" env:"RDXCLAW_TEMPERATURE"`
-	MaxToolIterations   int     `json:"max_tool_iterations" env:"RDXCLAW_MAX_TOOL_ITERATIONS"`
-	Timeout             int     `json:"timeout" env:"RDXCLAW_TIMEOUT"` // In seconds
+	Workspace           string           `json:"workspace" env:"RDXCLAW_WORKSPACE"`
+	RestrictToWorkspace bool             `json:"restrict_to_workspace" env:"RDXCLAW_RESTRICT_TO_WORKSPACE"`
+	Provider            string           `json:"provider" env:"RDXCLAW_PROVIDER"`
+	Model               string           `json:"model" env:"RDXCLAW_MODEL"`
+	Fallbacks           []FallbackConfig `json:"fallbacks,omitempty"`
+	MaxTokens           int              `json:"max_tokens" env:"RDXCLAW_MAX_TOKENS"`
+	Temperature         float64          `json:"temperature" env:"RDXCLAW_TEMPERATURE"`
+	MaxToolIterations   int              `json:"max_tool_iterations" env:"RDXCLAW_MAX_TOOL_ITERATIONS"`
+	Timeout             int              `json:"timeout" env:"RDXCLAW_TIMEOUT"` // In seconds
 }
 
 type ChannelsConfig struct {
@@ -190,6 +198,7 @@ func DefaultConfig() *Config {
 				RestrictToWorkspace: true,
 				Provider:            "",
 				Model:               "gpt-4o",
+				Fallbacks:           []FallbackConfig{},
 				MaxTokens:           8192,
 				Temperature:         0.7,
 				MaxToolIterations:   20,
