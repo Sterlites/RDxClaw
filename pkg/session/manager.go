@@ -284,3 +284,38 @@ func (sm *SessionManager) SetHistory(key string, history []providers.Message) {
 		session.Updated = time.Now()
 	}
 }
+
+// SessionInfo handles the summary of a session for listing.
+type SessionInfo struct {
+	Key        string    `json:"key"`
+	TurnCount  int       `json:"turn_count"`
+	LastUpdate time.Time `json:"last_update"`
+	Summary    string    `json:"summary,omitempty"`
+	Status     string    `json:"status"` // completed, interrupted, active
+}
+
+func (sm *SessionManager) ListSessions() []SessionInfo {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+
+	var list []SessionInfo
+	for _, s := range sm.sessions {
+		status := "completed"
+		if len(s.Messages) > 0 {
+			lastMsg := s.Messages[len(s.Messages)-1]
+			// Simplified heuristic: if last msg is assistant but has tool calls, it was likely interrupted
+			if lastMsg.Role == "assistant" && len(lastMsg.ToolCalls) > 0 {
+				status = "interrupted"
+			}
+		}
+
+		list = append(list, SessionInfo{
+			Key:        s.Key,
+			TurnCount:  len(s.Messages),
+			LastUpdate: s.Updated,
+			Summary:    s.Summary,
+			Status:     status,
+		})
+	}
+	return list
+}

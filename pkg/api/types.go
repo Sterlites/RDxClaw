@@ -3,7 +3,26 @@ package api
 import (
 	"time"
 	"github.com/Sterlites/RDxClaw/pkg/agent"
+	"github.com/Sterlites/RDxClaw/pkg/session"
 )
+
+// --- Session & Recovery Types ---
+
+// SessionListResponse contains the list of all available sessions.
+type SessionListResponse struct {
+	Sessions []session.SessionInfo `json:"sessions"`
+	Count    int                   `json:"count"`
+}
+
+// ResumeSessionRequest is the payload to resume an interrupted session.
+type ResumeSessionRequest struct {
+	SessionKey string `json:"session_key"`
+}
+
+// RecoveryConfig defines the user preferences for task recovery.
+type RecoveryConfig struct {
+	AutoResume bool `json:"auto_resume"`
+}
 
 // --- OpenAI-Compatible Chat Completion Types ---
 

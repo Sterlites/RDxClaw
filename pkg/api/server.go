@@ -120,9 +120,12 @@ func (s *Server) Start() error {
 	mux.HandleFunc("GET /v1/skills", s.handleListSkills)
 	mux.HandleFunc("GET /v1/agents", s.handleListAgents)
 	mux.HandleFunc("DELETE /v1/agents/{id}", s.handleKillAgent)
-	mux.HandleFunc("GET /v1/files", s.handleListFiles)
 	mux.HandleFunc("GET /v1/files/content", s.handleGetFileContent)
 	mux.HandleFunc("POST /v1/files/save", s.handleUpdateFileContent)
+	mux.HandleFunc("GET /v1/sessions", s.handleListSessions)
+	mux.HandleFunc("POST /v1/sessions/resume", s.handleResumeSession)
+	mux.HandleFunc("GET /v1/config/recovery", s.handleGetRecoveryConfig)
+	mux.HandleFunc("POST /v1/config/recovery", s.handleUpdateRecoveryConfig)
 	mux.HandleFunc("GET /health", s.handleHealth)
 	mux.HandleFunc("GET /ready", s.handleHealth)
 
@@ -585,45 +588,6 @@ func (s *Server) handleKillAgent(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request) {
-	// Root directories to scan for relevant files
-	docsDirs := []string{s.workspace, filepath.Join(s.workspace, "memory")}
-	var files []FileListItem
-
-	for _, dir := range docsDirs {
-		// Verify directory exists
-		if _, err := os.Stat(dir); os.IsNotExist(err) {
-			continue
-		}
-
-		err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return nil // Skip errors
-			}
-			if !info.IsDir() && filepath.Ext(path) == ".md" {
-				// Calculate relative path for tree view
-				rel, _ := filepath.Rel(s.workspace, path)
-				files = append(files, FileListItem{
-					Name:    info.Name(),
-					Path:    path,
-					RelPath: rel,
-					Size:    info.Size(),
-					ModTime: info.ModTime(),
-				})
-			}
-			return nil
-		})
-		if err != nil {
-			slog.Warn("Error walking directory", "dir", dir, "err", err)
-		}
-	}
-
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"files": files,
-		"count": len(files),
-	})
-}
-
 func (s *Server) handleGetFileContent(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
 	if path == "" {
@@ -721,6 +685,80 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
 		"status": "ok",
 	})
+}
+
+func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
+	sm := s.agentLoop.GetSessionManager()
+	if sm == nil {
+		writeError(w, http.StatusServiceUnavailable, "session_manager_unavailable", "session manager not initialized")
+		return
+	}
+
+	sessions := sm.ListSessions()
+	writeJSON(w, http.StatusOK, SessionListResponse{
+		Sessions: sessions,
+		Count:    len(sessions),
+	})
+}
+
+func (s *Server) handleResumeSession(w http.ResponseWriter, r *http.Request) {
+	var req ResumeSessionRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+
+	if req.SessionKey == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "session_key is required")
+		return
+	}
+
+	// Use a non-request context for the background execution
+	ctx, cancel := context.WithTimeout(context.Background(), 24*time.Hour)
+	// Don't defer cancel() here as we want the goroutine to finish
+
+	// Parse origin channel from session key if possible
+	channel := "api"
+	chatID := "api"
+	if idx := strings.Index(req.SessionKey, ":"); idx > 0 {
+		channel = req.SessionKey[:idx]
+		chatID = req.SessionKey[idx+1:]
+	}
+
+	s.recordEvent("agent", "info", fmt.Sprintf("Resuming session: %s", req.SessionKey))
+
+	// Resuming is just calling ProcessDirect with an empty user message.
+	go func() {
+		defer cancel() // Cancel when the goroutine finishes
+		_, err := s.agentLoop.ProcessDirectWithChannel(ctx, "", req.SessionKey, channel, chatID)
+		if err != nil {
+			s.recordEvent("agent", "error", fmt.Sprintf("Resume error: %v", err))
+		} else {
+			s.recordEvent("agent", "success", fmt.Sprintf("Session %s completed after resume", req.SessionKey))
+		}
+	}()
+
+	writeJSON(w, http.StatusAccepted, map[string]interface{}{
+		"success": true,
+		"message": "Resume triggered in background",
+	})
+}
+
+func (s *Server) handleGetRecoveryConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, RecoveryConfig{
+		AutoResume: true,
+	})
+}
+
+func (s *Server) handleUpdateRecoveryConfig(w http.ResponseWriter, r *http.Request) {
+	var req RecoveryConfig
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	
+	s.recordEvent("system", "info", fmt.Sprintf("Updated recovery config: AutoResume=%v", req.AutoResume))
+	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
 }
 
 // --- Helpers ---

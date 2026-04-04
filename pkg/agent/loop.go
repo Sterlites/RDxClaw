@@ -293,6 +293,10 @@ func (al *AgentLoop) SetChannelManager(cm *channels.Manager) {
 	al.channelManager = cm
 }
 
+func (al *AgentLoop) GetSessionManager() *session.SessionManager {
+	return al.sessions
+}
+
 func (al *AgentLoop) GetSwarmManager() *swarm.Manager {
 	return al.swarmManager
 }
@@ -468,7 +472,7 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 	})
 }
 
-func (al *AgentLoop) processSystemMessage(ctx context.Context, msg bus.InboundMessage) (string, error) {
+func (al *AgentLoop) processSystemMessage(_ context.Context, msg bus.InboundMessage) (string, error) {
 	// Verify this is a system message
 	if msg.Channel != "system" {
 		return "", fmt.Errorf("processSystemMessage called with non-system message channel: %s", msg.Channel)
@@ -560,8 +564,10 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, opts processOptions) (str
 	)
 	stats.ContextBuildMS = time.Since(contextStart).Milliseconds()
 
-	// 2. Save user message to session
-	al.sessions.AddMessage(opts.SessionKey, "user", opts.UserMessage)
+	// 2. Save user message to session if not empty (normal chat)
+	if opts.UserMessage != "" {
+		al.sessions.AddMessage(opts.SessionKey, "user", opts.UserMessage)
+	}
 
 	// 3. Run LLM iteration loop
 	finalContent, iteration, llmMS, toolMS, turns, err := al.runLLMIteration(ctx, messages, opts)
@@ -640,7 +646,7 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, opts processOptions) (str
 	return finalContent, nil
 }
 
-func (al *AgentLoop) rotateProvider(ctx context.Context, channel, chatID string) bool {
+func (al *AgentLoop) rotateProvider(_ context.Context, _, _ string) bool {
 	al.providerMu.Lock()
 	defer al.providerMu.Unlock()
 
@@ -1071,6 +1077,7 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 
 		// Save assistant message with tool calls to session
 		al.sessions.AddFullMessage(opts.SessionKey, assistantMsg)
+		_ = al.sessions.Save(opts.SessionKey) // #nosec G104 - Checkpoint Turn Start
 
 		// Execute tool calls
 		var turnToolMS int64
@@ -1166,6 +1173,7 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 
 			// Save tool result message to session
 			al.sessions.AddFullMessage(opts.SessionKey, toolResultMsg)
+			_ = al.sessions.Save(opts.SessionKey) // #nosec G104 - Checkpoint Action Complete
 		}
 
 		turns = append(turns, IterationStats{
@@ -1549,7 +1557,7 @@ func (al *AgentLoop) estimateTokens(messages []providers.Message) int {
 	return totalChars * 2 / 5
 }
 
-func (al *AgentLoop) handleCommand(ctx context.Context, msg bus.InboundMessage) (string, bool) {
+func (al *AgentLoop) handleCommand(_ context.Context, msg bus.InboundMessage) (string, bool) {
 	content := strings.TrimSpace(msg.Content)
 	if !strings.HasPrefix(content, "/") {
 		return "", false

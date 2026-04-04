@@ -104,6 +104,7 @@ document.querySelectorAll('.nav-item').forEach(el => {
     if (el.dataset.target === 'swarm') loadAgents();
     if (el.dataset.target === 'skills') loadSkills();
     if (el.dataset.target === 'docs') loadFiles();
+    if (el.dataset.target === 'sessions') loadSessions();
   });
 });
 
@@ -153,7 +154,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const activeSection = document.querySelector('.section.active');
     if (activeSection.id === 'swarm') loadAgents();
     if (activeSection.id === 'docs') loadFiles();
+    if (activeSection.id === 'sessions') loadSessions();
   }, 3000);
+
+  // Failsafe: Check for interrupted sessions on boot
+  setTimeout(checkRecovery, 2000);
 });
 
 // Visibility API
@@ -801,7 +806,7 @@ async function sendMessage() {
         }
       }
     }
-    
+
     assistantMsg.telemetry = Date.now() - startTime;
     assistantMsg.timestamp = new Date();
 
@@ -811,6 +816,80 @@ async function sendMessage() {
 
   loader.classList.remove('active');
   renderChat();
+}
+
+async function loadSessions() {
+  const data = await fetchJSON('/sessions');
+  const tbody = document.getElementById('sessionsTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  
+  if (!data || !data.sessions || data.sessions.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" class="empty-state">No recorded missions found in workspace/sessions.</td></tr>`;
+    return;
+  }
+
+  // Sort by last update descending
+  const sorted = data.sessions.sort((a, b) => new Date(b.last_update) - new Date(a.last_update));
+
+  sorted.forEach(sess => {
+    const tr = document.createElement('tr');
+    const statusClass = sess.status === 'interrupted' ? 'interrupted' : (sess.status === 'active' ? 'active' : 'completed');
+    
+    tr.innerHTML = `
+      <td><span class="agent-id">[ ${sess.key} ]</span></td>
+      <td>${sess.turn_count} TURNS</td>
+      <td>${new Date(sess.last_update).toLocaleString()}</td>
+      <td><span class="status-tag ${statusClass}">${sess.status.toUpperCase()}</span></td>
+      <td>
+        ${sess.status === 'interrupted' ? `<button class="btn-matrix btn-small" onclick="resumeSession('${sess.key}')">RESUME</button>` : ''}
+        <button class="btn-matrix btn-small" onclick="viewSessionLogs('${sess.key}')">LOGS</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function resumeSession(key) {
+  const res = await fetchJSON('/sessions/resume', {
+    method: 'POST',
+    body: JSON.stringify({ session_key: key })
+  });
+  
+  if (res && res.success) {
+    document.getElementById('recoveryOverlay').classList.remove('active');
+    // Switch to chat tab to see the resumed output
+    document.querySelector('[data-target="chat"]').click();
+  } else {
+    alert("FAILED_TO_RESUME: Context synchronization error.");
+  }
+}
+
+async function checkRecovery() {
+  const data = await fetchJSON('/sessions');
+  if (!data || !data.sessions) return;
+  
+  const interrupted = data.sessions.find(s => s.status === 'interrupted');
+  if (interrupted) {
+    const overlay = document.getElementById('recoveryOverlay');
+    const info = document.getElementById('recoveryInfo');
+    
+    info.innerHTML = `
+      <div class="recovery-meta"><span>MISSION_KEY:</span><span>${interrupted.key}</span></div>
+      <div class="recovery-meta"><span>LAST_TURN:</span><span>${interrupted.turn_count}</span></div>
+      <div class="recovery-meta"><span>TIME_STAMP:</span><span>${new Date(interrupted.last_update).toLocaleTimeString()}</span></div>
+    `;
+    
+    document.getElementById('resumeSessionBtn').onclick = () => resumeSession(interrupted.key);
+    document.getElementById('discardRecoveryBtn').onclick = () => overlay.classList.remove('active');
+    
+    overlay.classList.add('active');
+  }
+}
+
+function viewSessionLogs(key) {
+  // Mock: in real use, this would load the session history into the terminal view
+  alert(`Loading context logs for ${key}...`);
 }
 
 document.getElementById('chatInput').addEventListener('keypress', function (e) {

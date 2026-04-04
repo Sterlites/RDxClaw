@@ -1406,3 +1406,119 @@ body:not(.booting) .matrix-theme main { opacity: 1; transform: translateY(0); }
 .topbar {
     justify-content: space-between;
 }
+
+/* --- Failsafe & Recovery Styles --- */
+
+.recovery-pulse {
+  border: 2px solid var(--matrix-lime) !important;
+  box-shadow: 0 0 30px var(--matrix-glow), inset 0 0 15px var(--matrix-glow) !important;
+  animation: recovery-glow 2s infinite ease-in-out;
+}
+
+@keyframes recovery-glow {
+  0% { box-shadow: 0 0 15px var(--matrix-glow); }
+  50% { box-shadow: 0 0 40px var(--matrix-lime); }
+  100% { box-shadow: 0 0 15px var(--matrix-glow); }
+}
+
+.status-tag {
+  display: inline-block;
+  padding: 4px 8px;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  font-weight: bold;
+  border: 1px solid currentColor;
+}
+
+.status-tag.interrupted {
+  color: var(--matrix-red);
+  background: rgba(255, 0, 60, 0.1);
+  text-shadow: 0 0 5px var(--matrix-red);
+  animation: flash 1s infinite alternate;
+}
+
+.status-tag.completed {
+  color: var(--matrix-green);
+  opacity: 0.8;
+}
+
+.status-tag.active {
+  color: var(--matrix-lime);
+  background: rgba(0, 255, 65, 0.1);
+}
+
+.recovery-info {
+  margin: 20px 0;
+  padding: 15px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px dashed var(--matrix-dim);
+  text-align: left;
+}
+
+.recovery-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--matrix-dim);
+  margin-bottom: 5px;
+}
+
+.recovery-meta span:last-child {
+  color: var(--matrix-white);
+}
+
+@keyframes flash {
+  from { opacity: 1; }
+  to { opacity: 0.4; }
+}
+
+/* Tab Logic */
+.section {
+  display: none;
+}
+
+.section.active {
+  display: block;
+}
+
+/* Mission Logs Grid */
+#sessionsTableBody tr {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+#sessionsTableBody tr:hover {
+  background: rgba(0, 255, 65, 0.05);
+}
+
+.btn-matrix {
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  background: transparent;
+  color: var(--matrix-green);
+  border: 1px solid var(--matrix-green);
+  padding: 8px 16px;
+  text-transform: uppercase;
+  transition: all 0.2s;
+  font-size: 0.8rem;
+}
+
+.btn-matrix:hover {
+  background: rgba(0, 255, 65, 0.2);
+  box-shadow: 0 0 15px var(--matrix-glow);
+}
+
+.btn-matrix.btn-danger {
+  color: var(--matrix-red);
+  border-color: var(--matrix-red);
+}
+
+.btn-matrix.btn-danger:hover {
+  background: rgba(255, 0, 60, 0.2);
+  box-shadow: 0 0 15px rgba(255, 0, 60, 0.3);
+}
+
+.btn-small {
+  padding: 4px 8px;
+  font-size: 0.7rem;
+}

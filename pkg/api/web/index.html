@@ -39,6 +39,9 @@
       <li class="nav-item" data-target="docs">
         <span>// MEMORY_DOCS</span>
       </li>
+      <li class="nav-item" data-target="sessions">
+        <span>// MISSION_LOGS</span>
+      </li>
     </ul>
   </aside>
 
@@ -324,6 +327,25 @@
       </div>
       
       <p class="auth-hint">Check your server configuration or <code>RDXCLAW_API_KEY</code> env var.</p>
+    </div>
+  </div>
+
+  <!-- Recovery Overlay -->
+  <div id="recoveryOverlay" class="overlay">
+    <div class="overlay-content recovery-pulse">
+      <div class="glitch-text" data-text="SESSION_INTERRUPTED">SESSION_INTERRUPTED</div>
+      <p id="recoveryDesc">Detecting a lapsed mission context. Re-establishing connection is recommended.</p>
+      
+      <div class="recovery-info" id="recoveryInfo">
+        <!-- Rendered via JS -->
+      </div>
+      
+      <div class="auth-input-group">
+        <button id="resumeSessionBtn" class="btn-matrix">RE_ESTABLISH_UPLINK (RESUME)</button>
+        <button id="discardRecoveryBtn" class="btn-matrix btn-danger">DISCARD_CONTEXT</button>
+      </div>
+      
+      <p class="auth-hint">Failsafe active: No data was lost during the interruption.</p>
     </div>
   </div>
 

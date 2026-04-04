@@ -36,12 +36,14 @@ type Manager struct {
 	workspace     string
 	registry      *tools.ToolRegistry
 	maxIterations int
+	persistence   *Persistence
 	nextID        int
 }
 
 // NewManager creates a new swarm manager.
 func NewManager(provider providers.LLMProvider, defaultModel, workspace string, bus *bus.MessageBus) *Manager {
-	return &Manager{
+	persistence := NewPersistence(workspace)
+	m := &Manager{
 		tasks:         make(map[string]*SubagentTask),
 		provider:      provider,
 		defaultModel:  defaultModel,
@@ -49,7 +51,33 @@ func NewManager(provider providers.LLMProvider, defaultModel, workspace string, 
 		workspace:     workspace,
 		registry:      tools.NewToolRegistry(),
 		maxIterations: 10,
+		persistence:   persistence,
 		nextID:        1,
+	}
+	
+	// Try to recover any existing tasks
+	if recovered, err := persistence.LoadTasks(); err == nil {
+		m.tasks = recovered
+		// Find highest ID to avoid collisions
+		maxID := 0
+		for idStr := range recovered {
+			var id int
+			if _, err := fmt.Sscanf(idStr, "agent-%d", &id); err == nil {
+				if id > maxID {
+					maxID = id
+				}
+			}
+		}
+		m.nextID = maxID + 1
+	}
+
+	return m
+}
+
+// save is a helper to persist tasks to disk. Must be called with mu held (or managed internally)
+func (sm *Manager) save() {
+	if err := sm.persistence.SaveTasks(sm.tasks); err != nil {
+		fmt.Printf("[ERROR] swarm: failed to save tasks: %v\n", err)
 	}
 }
 
@@ -83,7 +111,8 @@ func (sm *Manager) Spawn(ctx context.Context, task, label, originChannel, origin
 		cancel:        cancel,
 	}
 	sm.tasks[taskID] = subagentTask
-
+	sm.save()
+	sm.mu.Unlock()
 	// Start task in background
 	go func(tCtx context.Context) { // #nosec G118
 		defer cancel() // Ensure cancellation function is called to release resources
@@ -151,6 +180,7 @@ func (sm *Manager) RunTask(ctx context.Context, task *SubagentTask) (loopResult 
 			task.Status = "completed"
 		}
 		sm.mu.Unlock()
+		sm.save()
 	}()
 
 	// Recover from panics during task execution, converting them to errors
@@ -212,6 +242,7 @@ When finished, provide a clear summary of your work.`
 		task.Result = loopResult.Content
 	}
 	sm.mu.Unlock()
+	sm.save()
 
 	// Announce to bus
 	if sm.bus != nil {
@@ -278,5 +309,6 @@ func (sm *Manager) KillAgent(id string) error {
 		task.cancel()
 	}
 	task.Status = "cancelled"
+	sm.save()
 	return nil
 }
