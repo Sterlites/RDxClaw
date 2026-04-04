@@ -7,110 +7,144 @@ on:
 permissions:
   contents: read
 
+env:
+  APP_NAME: rdxclaw
+  BINARY_NAME: rdxclaw-linux-amd64
+  GO_VERSION: '1.24'
+
 jobs:
   build:
+    name: Build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
+          go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Build
         run: make generate && make build
 
+      - name: Verify binary exists
+        run: |
+          if [ ! -f "build/${{ env.BINARY_NAME }}" ]; then
+            echo "❌ Binary not found at build/${{ env.BINARY_NAME }}"
+            exit 1
+          fi
+          echo "✅ Binary size: $(du -sh build/${{ env.BINARY_NAME }} | cut -f1)"
+
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rdxclaw-binary
-          path: build/rdxclaw-linux-amd64
+          name: ${{ env.APP_NAME }}-binary
+          path: build/${{ env.BINARY_NAME }}
           retention-days: 1
+          if-no-files-found: error
 
   deploy:
+    name: Deploy to VPS
     runs-on: ubuntu-latest
     needs: build
     environment: production
-    steps:
-      - uses: actions/checkout@v4
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
 
-      - name: Download binary artifact
+    steps:
+      - name: Checkout (for deploy script)
+        uses: actions/checkout@v4
+
+      - name: Download binary
         uses: actions/download-artifact@v4
         with:
-          name: rdxclaw-binary
+          name: ${{ env.APP_NAME }}-binary
           path: build/
 
-      - name: SCP Binary
+      - name: Verify downloaded binary
+        run: |
+          chmod +x build/${{ env.BINARY_NAME }}
+          echo "✅ Binary ready: $(du -sh build/${{ env.BINARY_NAME }} | cut -f1)"
+
+      - name: SCP Binary to VPS
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          port: 22
-          source: "build/rdxclaw-linux-amd64"
+          port: ${{ secrets.VPS_PORT || 22 }}
+          source: "build/${{ env.BINARY_NAME }}"
           target: "/tmp/"
           strip_components: 1
           overwrite: true
           timeout: 60s
           command_timeout: 10m
 
-      - name: SCP Deploy Script
+      - name: SCP Deploy Script to VPS
         uses: appleboy/scp-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          port: 22
+          port: ${{ secrets.VPS_PORT || 22 }}
           source: "scripts/deploy.sh"
-          target: "/home/${{ secrets.VPS_USER }}/scripts/"
+          target: "/tmp/"
           strip_components: 1
           overwrite: true
           timeout: 60s
 
-      - name: Deploy & Start
+      - name: Deploy & Verify
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          port: 22
+          port: ${{ secrets.VPS_PORT || 22 }}
           timeout: 60s
-          command_timeout: 10m
+          command_timeout: 15m
           script: |
             set -e
 
-            echo "=== [1/4] Preparing ==="
-            chmod +x ~/scripts/deploy.sh
-            chmod +x /tmp/rdxclaw-linux-amd64
+            echo "📋 Deployment Info"
+            echo "  Host:   $(hostname)"
+            echo "  User:   $(whoami)"
+            echo "  Time:   $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            echo "  Commit: ${{ github.sha }}"
+            echo ""
 
-            echo "=== [2/4] Running deploy script ==="
+            # Move deploy script to persistent location
+            mkdir -p ~/scripts
+            mv /tmp/deploy.sh ~/scripts/deploy.sh
+            chmod +x ~/scripts/deploy.sh
+            chmod +x /tmp/${{ env.BINARY_NAME }}
+
+            # Run deployment
             ~/scripts/deploy.sh
 
-            echo "=== [3/4] Verifying service ==="
-            sleep 3
-            if systemctl is-active --quiet rdxclaw; then
-              echo "✅ rdxclaw service is running"
-            else
-              echo "❌ rdxclaw service failed to start"
-              sudo journalctl -u rdxclaw --no-pager -n 30
-              exit 1
-            fi
-
-            echo "=== [4/4] Deployment complete ==="
-            systemctl status rdxclaw --no-pager
-
   notify:
+    name: Notify
     runs-on: ubuntu-latest
-    needs: deploy
+    needs: [ build, deploy ]
     if: always()
     steps:
-      - name: Notify success
+      - name: Success
         if: needs.deploy.result == 'success'
-        run: echo "✅ Deployment to rdxclaw succeeded"
+        run: |
+          echo "✅ Deployment succeeded"
+          echo "  Commit:  ${{ github.sha }}"
+          echo "  Branch:  ${{ github.ref_name }}"
+          echo "  By:      ${{ github.actor }}"
+          echo "  Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
-      - name: Notify failure
-        if: needs.deploy.result != 'success'
+      - name: Failure
+        if: needs.build.result == 'failure' || needs.deploy.result == 'failure'
         run: |
           echo "❌ Deployment failed"
+          echo "  Build:   ${{ needs.build.result }}"
+          echo "  Deploy:  ${{ needs.deploy.result }}"
+          echo "  Commit:  ${{ github.sha }}"
+          echo "  Logs:    ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           exit 1
