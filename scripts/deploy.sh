@@ -64,12 +64,12 @@ After=network.target
 Type=simple
 User=$USER
 WorkingDirectory=$HOME
-EnvironmentFile=-$HOME/.rdxclaw/env
-ExecStart=$BINARY_PATH server --port $PORT
-Restart=always
-RestartSec=5
-StandardOutput=append:$LOG_FILE
-StandardError=append:$LOG_FILE
+    EnvironmentFile=-$HOME/.rdxclaw/env
+    ExecStart=$BINARY_PATH server --port $PORT
+    Restart=always
+    RestartSec=5
+    StandardOutput=journal
+    StandardError=journal
 
 [Install]
 WantedBy=multi-user.target"
