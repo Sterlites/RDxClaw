@@ -180,6 +180,44 @@ RDxClaw organizes intelligence into a structured workspace:
 
 ---
 
+## ♾️ Multi-API Quota Fallback (Enterprise)
+
+RDxClaw supports **automatic, mid-task provider rotation**. If your primary API key hits a quota limit (429) or runs out of credits, the agent immediately swaps to a fallback key/model without losing any session context.
+
+### Setup
+Configure fallbacks in your `~/.rdxclaw/config.json` by adding a `fallbacks` array reachable under `agents.defaults`:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "provider": "openai",
+      "model": "gpt-4o",
+      "fallbacks": [
+        {
+          "provider": "anthropic",
+          "model": "claude-3-5-sonnet",
+          "api_key": "sk-ant-..."
+        },
+        {
+          "provider": "openai",
+          "model": "gpt-4o",
+          "api_key": "sk-proj-..."
+        }
+      ]
+    }
+  }
+}
+```
+
+- **Automatic Detection**: Seamlessly catches rate limits and "insufficient quota" errors.
+- **Zero-Loss Handoff**: The agent retries the current turn with the backup key, maintaining full memory.
+- **Dashboard Alerts**: Mission Control displays a warning notification whenever a failover occurs.
+
+---
+
+---
+
 ## 🏢 Enterprise Support & Roadmap
 
 PRs welcome! RDxClaw is built for community growth and professional reliability.
