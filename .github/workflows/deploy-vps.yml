@@ -96,34 +96,34 @@ jobs:
           overwrite: true
           timeout: 60s
 
-- name: Deploy & Verify
-  uses: appleboy/ssh-action@v1
-  with:
-    host: ${{ secrets.VPS_HOST }}
-    username: ${{ secrets.VPS_USER }}
-    key: ${{ secrets.VPS_SSH_KEY }}
-    port: 22
-    envs: RDXCLAW_PROVIDER,RDXCLAW_API_KEY,RDXCLAW_MODEL
-    script: |
-      set -e
-      # Write env file from CI secrets
-      mkdir -p ~/.rdxclaw
-      cat > ~/.rdxclaw/env << ENVEOF
-      RDXCLAW_PROVIDER=$RDXCLAW_PROVIDER
-      RDXCLAW_API_KEY=$RDXCLAW_API_KEY
-      RDXCLAW_MODEL=$RDXCLAW_MODEL
-      ENVEOF
-      chmod 600 ~/.rdxclaw/env
+      - name: Deploy & Verify
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          envs: RDXCLAW_PROVIDER,RDXCLAW_API_KEY,RDXCLAW_MODEL
+          script: |
+            set -e
+            # Write env file from CI secrets
+            mkdir -p ~/.rdxclaw
+            cat > ~/.rdxclaw/env << ENVEOF
+            RDXCLAW_PROVIDER=$RDXCLAW_PROVIDER
+            RDXCLAW_API_KEY=$RDXCLAW_API_KEY
+            RDXCLAW_MODEL=$RDXCLAW_MODEL
+            ENVEOF
+            chmod 600 ~/.rdxclaw/env
 
-      mkdir -p ~/scripts
-      mv /tmp/deploy.sh ~/scripts/deploy.sh
-      chmod +x ~/scripts/deploy.sh
-      chmod +x /tmp/rdxclaw-linux-amd64
-      ~/scripts/deploy.sh
-  env:
-    RDXCLAW_PROVIDER: ${{ secrets.RDXCLAW_PROVIDER }}
-    RDXCLAW_API_KEY: ${{ secrets.RDXCLAW_API_KEY }}
-    RDXCLAW_MODEL: ${{ secrets.RDXCLAW_MODEL }}
+            mkdir -p ~/scripts
+            mv /tmp/deploy.sh ~/scripts/deploy.sh
+            chmod +x ~/scripts/deploy.sh
+            chmod +x /tmp/rdxclaw-linux-amd64
+            ~/scripts/deploy.sh
+        env:
+          RDXCLAW_PROVIDER: ${{ secrets.RDXCLAW_PROVIDER }}
+          RDXCLAW_API_KEY: ${{ secrets.RDXCLAW_API_KEY }}
+          RDXCLAW_MODEL: ${{ secrets.RDXCLAW_MODEL }}
 
   notify:
     name: Notify
