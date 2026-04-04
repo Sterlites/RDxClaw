@@ -81,9 +81,11 @@ rdxclaw server --port 8080 --api-key YOUR_SECRET_KEY
 ```
 
 > [!TIP]
-> You can also set these via environment variables:
+> You can also configure the environment via variables:
 > `export RDXCLAW_PORT=8080`
 > `export RDXCLAW_API_KEY=YOUR_SECRET_KEY`
+> `export RDXCLAW_PROVIDER=anthropic|google|openai|nvidia`
+> `export RDXCLAW_MODEL=your-preferred-model`
 
 ### 2. Access the Dashboard
 Open your favorite browser and navigate to:
@@ -149,6 +151,12 @@ Download the latest release for your platform and run:
 ```bash
 docker compose --profile gateway up -d
 ```
+
+### 🚢 Continuous Deployment (VPS)
+For teams requiring automated deployments to production environments:
+1.  **Configure GitHub Secrets**: Set up `VPS_HOST`, `VPS_USER`, and `VPS_SSH_KEY` in your repository settings.
+2.  **Define Environment Variables**: Ensure `RDXCLAW_PROVIDER`, `RDXCLAW_API_KEY`, and `RDXCLAW_MODEL` are added as secrets to inject into the deployment environment.
+3.  **Automated Service Management**: The CI/CD pipeline (`.github/workflows/deploy-vps.yml`) intelligently detects your host environment, automatically managing `systemd` service files with root/sudo access or gracefully falling back to `nohup` for background execution.
 
 ---
 
