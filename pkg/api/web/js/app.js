@@ -467,6 +467,8 @@ async function executeSkill(skillName) {
   }
 }
 
+const treeFolderStates = {};
+
 async function loadFiles() {
   const data = await fetchJSON('/files');
   const fileList = document.getElementById('fileList');
@@ -486,14 +488,17 @@ async function loadFiles() {
   data.files.forEach(file => {
     const parts = file.rel_path.split(/[\\\/]/);
     let current = root;
+    let currentPath = '';
     
     parts.forEach((part, index) => {
+      currentPath = currentPath ? currentPath + '/' + part : part;
       const isLast = index === parts.length - 1;
       if (isLast) {
         current.children[part] = { ...file, type: 'file', name: part };
       } else {
         if (!current.children[part]) {
-          current.children[part] = { name: part, type: 'folder', children: {}, open: true };
+          let initialOpen = treeFolderStates[currentPath] !== undefined ? treeFolderStates[currentPath] : false;
+          current.children[part] = { name: part, type: 'folder', children: {}, open: initialOpen, path: currentPath };
         }
         current = current.children[part];
       }
@@ -529,6 +534,7 @@ async function loadFiles() {
         itemEl.onclick = (e) => {
           e.stopPropagation();
           item.open = !item.open;
+          if (item.path) treeFolderStates[item.path] = item.open;
           itemEl.querySelector('.folder-toggle').innerText = item.open ? '▼' : '▶';
           childrenContainer.style.display = item.open ? 'block' : 'none';
         };
