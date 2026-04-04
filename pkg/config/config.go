@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -308,6 +309,7 @@ func LoadConfig(path string) (*Config, error) {
 	// use RDXCLAW_API_KEY (seamless experience for single-key setups)
 	if cfg.API.APIKey == "" && globalKey != "" {
 		cfg.API.APIKey = globalKey
+		log.Printf("[INFO] Server Auth: Fallback to RDXCLAW_API_KEY (masked: %s...)", globalKey[:min(4, len(globalKey))])
 	}
 
 	if globalKey != "" || globalBase != "" {
