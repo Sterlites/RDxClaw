@@ -31,7 +31,7 @@
     ];
 
     window.addEventListener('keydown', (e) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        if ((e.ctrlKey || e.metaKey) && e.key === ' ') {
             e.preventDefault();
             togglePalette();
         }
