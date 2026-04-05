@@ -282,6 +282,7 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     clearInterval(matrixInterval);
   } else {
+    initMatrix(); // Re-init in case canvas was resized while hidden
     matrixInterval = setInterval(drawMatrix, 50);
   }
 });
@@ -311,6 +312,7 @@ function renderPulse(newLatency) {
     if (latencies.length > MAX_LATENCIES) latencies.shift();
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset transform before scaling
     ctx.scale(dpr, dpr);
     
     const baseLine = rect.height - 10;
@@ -356,12 +358,12 @@ function renderPulse(newLatency) {
     ctx.setTransform(1,0,0,1,0,0);
 }
 
+let lastSseTime = 0;
+
 // Global pulse loop for when SSE is quiet
 setInterval(() => {
     if (Date.now() - lastSseTime > 5000) renderPulse(null);
 }, 200);
-
-let lastSseTime = 0;
 
 function showToast(message, type = 'info') {
     const container = document.getElementById('toastContainer');
@@ -541,7 +543,7 @@ function addActivityItem(ev, prepend = true) {
         <span class="activity-source">[ ${ev.source || 'SYSTEM'} ]</span>
         <span class="activity-time">${time}</span>
       </div>
-      <div class="activity-msg">${ev.message}</div>
+      <div class="activity-msg">${escapeHTML(ev.message || '')}</div>
     </div>
   `;
 
@@ -619,7 +621,7 @@ async function loadAgents() {
       <td><span class="agent-id">${displayId}</span></td>
       <td><span class="${isRunning ? 'typing' : ''}">${task}</span></td>
       <td>
-        <div style="font-size: 0.7srem; color: var(--matrix-dim); margin-bottom: 4px;">
+        <div style="font-size: 0.7rem; color: var(--matrix-dim); margin-bottom: 4px;">
           ${renderLoadingBar(isRunning ? 100 : 0)} ${status}
         </div>
       </td>
@@ -725,7 +727,7 @@ async function loadFiles() {
   }
 
   // Preserve active selection if possible
-  const activePath = document.querySelector('.file-item.active')?.dataset.path;
+  const activePath = document.querySelector('.tree-item.active')?.dataset.path;
   
   fileList.innerHTML = '';
   
@@ -818,7 +820,7 @@ async function loadFileContent(path, el) {
   // Reset UI
   cancelEdit();
   
-  document.querySelectorAll('.file-item').forEach(item => item.classList.remove('active'));
+  document.querySelectorAll('.tree-item').forEach(item => item.classList.remove('active'));
   if (el) el.classList.add('active');
 
   document.getElementById('fileContent').innerText = '// PULLING_DATA_FROM_GRID...';
@@ -998,7 +1000,7 @@ async function sendMessage(source = 'main') {
   renderChat();
 
   const loader = document.getElementById('chatLoader');
-  loader.classList.add('active');
+  if (loader) loader.classList.add('active');
   const startTime = Date.now();
 
   try {
@@ -1097,7 +1099,7 @@ async function sendMessage(source = 'main') {
     chatMessages.push({ role: 'assistant', content: `Connection failed: ${err.message}` });
   }
 
-  loader.classList.remove('active');
+  if (loader) loader.classList.remove('active');
   renderChat();
 }
 
@@ -1136,6 +1138,7 @@ async function loadSessions() {
 async function resumeSession(key) {
   const res = await fetchJSON('/sessions/resume', {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ session_key: key })
   });
   

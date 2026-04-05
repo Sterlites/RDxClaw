@@ -946,6 +946,14 @@ func (s *Server) statusBroadcaster() {
 			Workspace: s.getWorkspaceStats(),
 		}
 
+		// Include telemetry so the dashboard latency panel updates in real-time via SSE
+		last, sessAvg, overallAvg := s.agentLoop.GetTelemetry("")
+		status.Telemetry = &TelemetryInfo{
+			LastResponse:    last,
+			SessionAverages: sessAvg,
+			OverallAverages: overallAvg,
+		}
+
 		s.broadcast("status", status)
 	}
 }
