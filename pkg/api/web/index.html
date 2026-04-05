@@ -370,6 +370,31 @@
     </div>
   </div>
 
+  <!-- Terminal Drawer -->
+  <div id="terminalDrawer" class="drawer">
+    <div class="drawer-header">
+      <div class="drawer-title">// GLOBAL_TERMINAL_UPLINK</div>
+      <div class="drawer-actions">
+        <button id="closeDrawerBtn" class="btn-icon">_</button>
+      </div>
+    </div>
+    <div class="drawer-content">
+      <div id="drawerMessages" class="chat-messages">
+        <!-- Shared with main chat via JS -->
+      </div>
+      <div class="chat-input-area">
+        <textarea id="drawerInput" placeholder="ENTER_COMMAND_FOR_GLOBAL_AGENT..." rows="1"></textarea>
+        <button id="drawerSendBtn" class="btn-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <button id="drawerToggle" class="drawer-toggle-btn" title="TOGGLE_TERMINAL">
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+  </button>
+
   <!-- Toast Container -->
   <div id="toastContainer" class="toast-container"></div>
 

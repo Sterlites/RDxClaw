@@ -11,6 +11,10 @@
         { id: 'nav-skills', text: 'GO TO SKILLS LIB', type: 'NAV', action: () => document.querySelector('[data-target="skills"]').click() },
         { id: 'nav-terminal', text: 'GO TO TERMINAL', type: 'NAV', action: () => document.querySelector('[data-target="chat"]').click() },
         { id: 'nav-docs', text: 'GO TO MEMORY DOCS', type: 'NAV', action: () => document.querySelector('[data-target="docs"]').click() },
+        { id: 'ui-drawer', text: 'TOGGLE GLOBAL DRAWER', type: 'UI', action: () => document.getElementById('drawerToggle').click() },
+        { id: 'theme-matrix', text: 'SET THEME: MATRIX', type: 'THEME', action: () => setTheme('matrix') },
+        { id: 'theme-zion', text: 'SET THEME: ZION', type: 'THEME', action: () => setTheme('zion') },
+        { id: 'theme-neuromancer', text: 'SET THEME: NEUROMANCER', type: 'THEME', action: () => setTheme('neuromancer') },
         { id: 'cmd-terminate', text: 'TERMINATE ALL AGENTS', type: 'CMD', action: async () => {
             if(confirm('TERMINATE ALL ACTIVE AGENTS?')) {
                 const data = await fetchJSON('/agents');
@@ -120,5 +124,20 @@
             item.action();
             togglePalette();
         }
+    }
+
+    function setTheme(theme) {
+        document.body.className = 'matrix-theme';
+        if (theme !== 'matrix') document.body.classList.add(`${theme}-theme`);
+        localStorage.setItem('rdx_theme', theme);
+        showToast(`THEME_UPDATED: ${theme.toUpperCase()}`, 'success');
+    }
+
+    // Load persisted theme
+    const savedTheme = localStorage.getItem('rdx_theme');
+    if (savedTheme) {
+        // Delay slightly to ensure DOM is ready if needed, 
+        // but since this script is at the end of body, it's fine.
+        setTheme(savedTheme);
     }
 })();

@@ -1369,6 +1369,11 @@ body:not(.booting) .matrix-theme main { opacity: 1; transform: translateY(0); }
   backdrop-filter: blur(8px);
 }
 
+/* Command Palette and Drawer Z-Index Override */
+#commandPalette { z-index: 10000 !important; }
+.drawer { z-index: 9000 !important; }
+.drawer-toggle-btn { z-index: 9001 !important; }
+
 .overlay.active {
   display: flex;
 }
@@ -1725,3 +1730,128 @@ body:not(.booting) .matrix-theme main { opacity: 1; transform: translateY(0); }
 .md-code { background: rgba(0, 255, 65, 0.1); color: var(--matrix-white); padding: 2px 4px; }
 .md-link { color: #0088ff; text-decoration: underline; }
 .md-list { color: var(--matrix-dim); }
+
+/* Zion Theme: High-Contrast Blue/White */
+.zion-theme {
+  --matrix-black:     #f4f7f6;
+  --matrix-darkgreen: #003d52;
+  --matrix-green:     #007791;
+  --matrix-lime:      #00b4d8;
+  --matrix-dim:       #48cae4;
+  --matrix-glow:      rgba(0, 119, 145, 0.1);
+  --matrix-red:       #e63946;
+  --matrix-white:     #03045e;
+  
+  --bg-dark: var(--matrix-black);
+  --bg-card: rgba(255, 255, 255, 0.9);
+  --text-primary: var(--matrix-white);
+  --text-secondary: var(--matrix-green);
+  --text-accent: var(--matrix-green);
+  --border-subtle: rgba(0, 119, 145, 0.2);
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --accent-glow: rgba(0, 119, 145, 0.15);
+}
+
+/* Neuromancer Theme: Magenta/Indigo Retrowave */
+.neuromancer-theme {
+  --matrix-black:     #0f0524;
+  --matrix-darkgreen: #3d004d;
+  --matrix-green:     #ff00ff;
+  --matrix-lime:      #00f0ff;
+  --matrix-dim:       #7000ff;
+  --matrix-glow:      rgba(255, 0, 255, 0.2);
+  --matrix-red:       #ff0055;
+  --matrix-white:     #ffffff;
+  
+  --bg-dark: var(--matrix-black);
+  --bg-card: rgba(15, 5, 36, 0.85);
+  --text-primary: var(--matrix-green);
+  --text-secondary: var(--matrix-dim);
+  --text-accent: var(--matrix-lime);
+  --border-subtle: rgba(255, 0, 255, 0.3);
+  --glass-bg: rgba(15, 5, 36, 0.7);
+  --accent-glow: rgba(255, 0, 255, 0.3);
+}
+
+/* Terminal Drawer Styles */
+.drawer {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%) translateY(100%);
+  width: 800px;
+  max-width: 95vw;
+  height: 400px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border-subtle);
+  border-bottom: none;
+  z-index: 1000;
+  transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.drawer.active {
+  transform: translateX(-50%) translateY(0);
+}
+
+.drawer-header {
+  padding: 10px 20px;
+  background: rgba(0, 0, 0, 0.3);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.drawer-title {
+  font-size: 0.8rem;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  color: var(--text-accent);
+}
+
+.drawer-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 15px;
+}
+
+.drawer-content .chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: 15px;
+}
+
+.drawer-toggle-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: var(--matrix-black);
+  border: 1px solid var(--matrix-green);
+  color: var(--matrix-green);
+  z-index: 999;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 15px var(--matrix-glow);
+  transition: all 0.3s;
+}
+
+.drawer-toggle-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 25px var(--matrix-glow-hard);
+  background: var(--matrix-darkgreen);
+}
+
+.drawer-toggle-btn.hidden {
+  display: none;
+}

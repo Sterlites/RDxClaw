@@ -151,6 +151,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Failsafe: Check for interrupted sessions on boot
   setTimeout(checkRecovery, 2000);
+
+  // Drawer Listeners
+  const drawer = document.getElementById('terminalDrawer');
+  const drawerToggle = document.getElementById('drawerToggle');
+  const closeDrawerBtn = document.getElementById('closeDrawerBtn');
+  
+  if (drawerToggle) {
+    drawerToggle.onclick = () => {
+        drawer.classList.add('active');
+        drawerToggle.classList.add('hidden');
+        document.getElementById('drawerInput').focus();
+    };
+  }
+
+  if (closeDrawerBtn) {
+    closeDrawerBtn.onclick = () => {
+        drawer.classList.remove('active');
+        drawerToggle.classList.remove('hidden');
+    };
+  }
+
+  document.getElementById('drawerSendBtn').onclick = () => sendMessage('drawer');
+  document.getElementById('drawerInput').onkeypress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage('drawer');
+    }
+  };
 });
 
 function initEventSource() {
@@ -164,12 +192,19 @@ function initEventSource() {
   eventSource.addEventListener('status', (e) => {
     try {
       const payload = JSON.parse(e.data);
-      renderStatus(payload.data);
+      const data = payload.data;
+      lastSseTime = Date.now();
+      
+      if (data.telemetry && data.telemetry.last_response) {
+          renderPulse(data.telemetry.last_response.total_ms);
+      }
+      
+      renderStatus(data);
       
       // Auto-refresh active tabs that depend on status
       const activeSection = document.querySelector('.section.active');
-      if (activeSection.id === 'swarm') loadAgents();
-      if (activeSection.id === 'sessions') loadSessions();
+      if (activeSection && activeSection.id === 'swarm') loadAgents();
+      if (activeSection && activeSection.id === 'sessions') loadSessions();
     } catch (err) {
       console.error("Failed to parse status event:", err);
     }
@@ -215,46 +250,70 @@ function renderPulse(newLatency) {
     
     // Resize if needed
     const rect = canvas.parentElement.getBoundingClientRect();
-    if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) {
+    if (rect.width > 0 && (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr)) {
         canvas.width = rect.width * dpr;
         canvas.height = rect.height * dpr;
         canvas.style.width = rect.width + 'px';
         canvas.style.height = rect.height + 'px';
     }
 
-    latencies.push(newLatency);
+    // If offline (no data), simulate a subtle heartbeat
+    const val = newLatency ?? (20 + Math.random() * 5);
+    latencies.push(val);
     if (latencies.length > MAX_LATENCIES) latencies.shift();
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.scale(dpr, dpr);
     
+    const baseLine = rect.height - 10;
+    const step = rect.width / (MAX_LATENCIES - 1);
+    const maxVal = Math.max(...latencies, 500);
+
+    // Draw background grid
+    ctx.strokeStyle = 'rgba(0, 255, 65, 0.05)';
+    ctx.lineWidth = 0.5;
+    for(let i=0; i<rect.width; i+=40) {
+        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, rect.height); ctx.stroke();
+    }
+
     ctx.beginPath();
-    ctx.strokeStyle = '#39ff14';
+    // Get color from CSS var if possible
+    ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--matrix-green').trim() || '#00ff41';
     ctx.lineWidth = 2;
     ctx.lineJoin = 'round';
     
-    const step = rect.width / (MAX_LATENCIES - 1);
-    const maxVal = Math.max(...latencies, 1000);
-    const baseLine = rect.height - 10;
-
-    latencies.forEach((val, i) => {
+    latencies.forEach((v, i) => {
         const x = i * step;
-        const h = (val / maxVal) * (rect.height - 20);
+        const h = (v / maxVal) * (rect.height - 20);
         const y = baseLine - h;
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
     });
-    
     ctx.stroke();
 
     // Fill under curve
-    ctx.lineTo((latencies.length - 1) * step, baseLine);
-    ctx.lineTo(0, baseLine);
-    ctx.fillStyle = 'rgba(0, 255, 65, 0.1)';
-    ctx.fill();
+    if (latencies.length > 1) {
+        ctx.lineTo((latencies.length - 1) * step, baseLine);
+        ctx.lineTo(0, baseLine);
+        ctx.fillStyle = 'rgba(0, 255, 65, 0.05)';
+        ctx.fill();
+    }
+
+    if (!newLatency) {
+        ctx.fillStyle = 'rgba(255, 0, 65, 0.6)';
+        ctx.font = '9px Share Tech Mono';
+        ctx.fillText('WARNING: LINK_OFFLINE // RUNNING_SCAN_LOOP', 10, 15);
+    }
     
-    ctx.setTransform(1,0,0,1,0,0); // Reset scale
+    ctx.setTransform(1,0,0,1,0,0);
 }
+
+// Global pulse loop for when SSE is quiet
+setInterval(() => {
+    if (Date.now() - lastSseTime > 5000) renderPulse(null);
+}, 200);
+
+let lastSseTime = 0;
 
 function showToast(message, type = 'info') {
     const container = document.getElementById('toastContainer');
@@ -841,35 +900,42 @@ let chatMessages = [
 ];
 
 function renderChat() {
-  const container = document.getElementById('chatMessages');
-  container.innerHTML = '';
-  
-  chatMessages.forEach((msg, idx) => {
-    const div = document.createElement('div');
-    div.className = `msg ${msg.role}`;
+  const containers = [
+    document.getElementById('chatMessages'),
+    document.getElementById('drawerMessages')
+  ];
+
+  containers.forEach(container => {
+    if (!container) return;
+    container.innerHTML = '';
     
-    const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
-    const isLast = idx === chatMessages.length - 1;
-    const isAgent = msg.role === 'assistant' || msg.role === 'agent';
-    
-    div.innerHTML = `
-      <div class="msg-meta">
-        <span class="msg-role">${isAgent ? '[ AGENT_UPLINK ]' : '[ COMMANDER ]'}</span>
-        <span class="msg-time">${time}${msg.telemetry ? ` // LATENCY: ${msg.telemetry}ms` : ''}</span>
-      </div>
-      <div class="msg-bubble ${isLast && isAgent ? 'typing' : ''}">${msg.content}</div>
-    `;
-    container.appendChild(div);
+    chatMessages.forEach((msg, idx) => {
+        const div = document.createElement('div');
+        div.className = `msg ${msg.role}`;
+        
+        const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+        const isLast = idx === chatMessages.length - 1;
+        const isAgent = msg.role === 'assistant' || msg.role === 'agent';
+        
+        div.innerHTML = `
+          <div class="msg-meta">
+            <span class="msg-role">${isAgent ? '[ AGENT_UPLINK ]' : '[ COMMANDER ]'}</span>
+            <span class="msg-time">${time}${msg.telemetry ? ` // LATENCY: ${msg.telemetry}ms` : ''}</span>
+          </div>
+          <div class="msg-bubble ${isLast && isAgent ? 'typing' : ''}">${msg.content}</div>
+        `;
+        container.appendChild(div);
+    });
+    container.scrollTop = container.scrollHeight;
   });
-  
-  container.scrollTop = container.scrollHeight;
 }
 
 
 const SESSION_ID = 'mc-' + Date.now();
 
-async function sendMessage() {
-  const inputEl = document.getElementById('chatInput');
+async function sendMessage(source = 'main') {
+  const inputId = source === 'drawer' ? 'drawerInput' : 'chatInput';
+  const inputEl = document.getElementById(inputId);
   const text = inputEl.value.trim();
   if (!text) return;
 
