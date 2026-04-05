@@ -137,6 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   loadStatus(); // Initial paint
   initEventSource(); // Real-time uplink
+  startLocalClock(); // Local clock ticker independent of SSE
   
   // Auth Event Listeners
   document.getElementById('saveKeyBtn').onclick = () => {
@@ -221,12 +222,59 @@ function initEventSource() {
 
   eventSource.addEventListener('connected', (e) => {
     console.log("Mission Control Uplink Established:", JSON.parse(e.data));
+    showToast('UPLINK_ESTABLISHED // SSE_CONNECTED', 'success');
   });
 
   eventSource.onerror = (err) => {
     console.warn("EventSource connection lost. Retrying...", err);
-    // EventSource handles retries automatically, but we might want to show UI state
+    showToast('UPLINK_LOST // RECONNECTING...', 'error');
   };
+}
+
+// --- Local Clock & Uptime Ticker ---
+let serverUptimeBase = null; // The uptime string last received from server
+let serverUptimeReceivedAt = null; // When we received it
+
+function startLocalClock() {
+  setInterval(() => {
+    // Tick the system clock every second
+    const clockEl = document.getElementById('systemClock');
+    if (clockEl) {
+      const now = new Date();
+      const ms = now.getMilliseconds().toString().padStart(3, '0');
+      clockEl.innerText = now.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ':' + ms;
+    }
+
+    // Interpolate uptime locally between SSE ticks
+    if (serverUptimeBase && serverUptimeReceivedAt) {
+      const elapsed = Math.floor((Date.now() - serverUptimeReceivedAt) / 1000);
+      const baseSeconds = parseUptimeToSeconds(serverUptimeBase);
+      const currentSeconds = baseSeconds + elapsed;
+      const uptimeEl = document.getElementById('uptimeVal');
+      if (uptimeEl) uptimeEl.innerHTML = `<span class="matrix-white">${formatSecondsToUptime(currentSeconds)}</span>`;
+    }
+  }, 200);
+}
+
+function parseUptimeToSeconds(str) {
+  // Handles Go's time.Duration format like "1h2m3s", "5m30s", "45s"
+  let total = 0;
+  const h = str.match(/(\d+)h/);
+  const m = str.match(/(\d+)m/);
+  const s = str.match(/(\d+)s/);
+  if (h) total += parseInt(h[1]) * 3600;
+  if (m) total += parseInt(m[1]) * 60;
+  if (s) total += parseInt(s[1]);
+  return total;
+}
+
+function formatSecondsToUptime(sec) {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  if (h > 0) return `${h}h${m}m${s}s`;
+  if (m > 0) return `${m}m${s}s`;
+  return `${s}s`;
 }
 
 // Visibility API
@@ -391,6 +439,11 @@ function renderStatus(data) {
     return `${(ms / 1000).toFixed(2)}s`;
   };
 
+  // Capture server uptime for local interpolation
+  if (data.uptime) {
+    serverUptimeBase = data.uptime;
+    serverUptimeReceivedAt = Date.now();
+  }
   updateVal('uptimeVal', data.uptime || '00:00:00');
   updateVal('versionVal', data.version || 'v1.0.0');
   

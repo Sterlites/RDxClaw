@@ -26,20 +26,26 @@ func AuthMiddleware(apiKey string, next http.Handler) http.Handler {
 			return
 		}
 
+		// Try Authorization header first
 		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			writeError(w, http.StatusUnauthorized, "missing_api_key", "Authorization header is required")
-			return
+		authenticated := false
+
+		if authHeader != "" {
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") && parts[1] == apiKey {
+				authenticated = true
+			}
 		}
 
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-			writeError(w, http.StatusUnauthorized, "invalid_auth_format", "Authorization header must be: Bearer <api_key>")
-			return
+		// Fallback: check query parameter (required for SSE/EventSource which cannot set headers)
+		if !authenticated {
+			if qKey := r.URL.Query().Get("api_key"); qKey != "" && qKey == apiKey {
+				authenticated = true
+			}
 		}
 
-		if parts[1] != apiKey {
-			writeError(w, http.StatusUnauthorized, "invalid_api_key", "Invalid API key")
+		if !authenticated {
+			writeError(w, http.StatusUnauthorized, "invalid_api_key", "Valid API key required via Authorization header or api_key query parameter")
 			return
 		}
 
