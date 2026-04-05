@@ -500,9 +500,10 @@ func (al *AgentLoop) processSystemMessage(_ context.Context, msg bus.InboundMess
 		content = content[idx+8:] // Extract just the result part
 	}
 
-	// Skip internal channels - only log, don't send to user
-	if constants.IsInternalChannel(originChannel) {
-		logger.InfoCF("agent", "Subagent completed (internal channel)",
+	// Skip internal system/subagent channels - only log, don't send to user. 
+	// Exception: CLI is frequently the origin and should be notified. 
+	if constants.IsInternalChannel(originChannel) && originChannel != "cli" {
+		logger.InfoCF("agent", "Subagent completed (internal system channel)",
 			map[string]interface{}{
 				"sender_id":   msg.SenderID,
 				"content_len": len(content),
@@ -646,7 +647,7 @@ func (al *AgentLoop) runAgentLoop(ctx context.Context, opts processOptions) (str
 	return finalContent, nil
 }
 
-func (al *AgentLoop) rotateProvider(_ context.Context, _, _ string) bool {
+func (al *AgentLoop) rotateProvider(ctx context.Context, channel, chatID string) bool {
 	al.providerMu.Lock()
 	defer al.providerMu.Unlock()
 
