@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/logo.jpg" alt="RDxClaw" width="512">
+  <img src="assets/logo.png" alt="RDxClaw" width="512">
 
   <h1>RDxClaw: Autonomous Business Intelligence at the Edge</h1>
 
