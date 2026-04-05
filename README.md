@@ -59,15 +59,21 @@ Coordinating teams of agents for complex, interdependent workflows.
 
 ## 🎮 Mission Control (Visual Dashboard)
 
-RDxClaw includes a high-performance, matrix-themed **Mission Control** dashboard. It provides real-time visibility into your agent swarms, system performance, and workspace memory.
+RDxClaw includes a high-performance, matrix-themed **Mission Control** dashboard. It provides real-time visibility into your agent swarms, system performance, and workspace memory — all streamed live via Server-Sent Events (SSE).
 
 ### Key Features
-- **📊 Real-time Dashboard**: Monitor uptime, active agents, memory usage, and primary model status.
-- **🐝 Swarm Management**: View and manage all background agents (active tasks, status, runtime).
-- **🛠️ Skills Library**: Browse installed capabilities and their specific functions.
-- **📟 Integrated Terminal**: Directly command the primary agent via a web-based console.
-- **🧠 Memory Explorer**: Browse and edit documents in your agent's long-term memory.
-- **⚡ Telemetry**: Detailed latency breakdown (Startup, LLM Inference, Tool Execution).
+- **📊 Real-time Dashboard**: Live uptime, active agents, memory, goroutines, heap objects, threads, and model status — all pushed via SSE with zero polling.
+- **🐝 Swarm Management**: View, monitor, and terminate background sub-agents. The primary kernel process is always visible and protected.
+- **🛠️ Skills Library**: Browse installed capabilities, view descriptions, and execute test payloads directly from the UI.
+- **📟 Integrated Terminal**: Full streaming chat console that pipes directly into the agent loop. Supports intermediate thoughts, multi-turn context, and latency tracking per response.
+- **🧠 Memory Explorer**: Hierarchical file tree with expand/collapse navigation. Read and live-edit workspace documents with syntax highlighting (Go, Markdown).
+- **📋 Mission Logs**: Session persistence layer — view all recorded missions, turn counts, timestamps, and statuses. Resume interrupted sessions with one click.
+- **⚡ Latency Telemetry**: Three-panel breakdown (Last Response, Session Average, Global Average) covering Startup, Context Build, LLM Inference, Tool Execution, and Response Prep — with a live pulse chart.
+- **🎨 Command Palette**: `Ctrl+Space` launches a VS Code-style command palette for instant navigation, theme switching, file search, and bulk agent control.
+- **💬 Global Terminal Drawer**: A persistent, slide-up chat drawer accessible from any tab — never lose your agent conversation while navigating.
+- **🛡️ Failsafe Recovery**: Automatic detection of interrupted sessions on boot with a one-click resume overlay. No data is lost during process crashes or network failures.
+- **🎭 Theme Engine**: Three built-in themes — **Matrix** (default green-on-black), **Zion** (high-contrast blue/white), and **Neuromancer** (magenta/indigo retrowave). Persisted via `localStorage`.
+- **🔒 XSS Hardened**: All user-facing content (activity feed, chat messages, event payloads) is escaped before DOM injection.
 
 ---
 
@@ -119,6 +125,8 @@ If you are developing or running from the repository:
 *   ⚡️ **Lightning Fast**: 1-second startup for instant-on automation.
 *   🔒 **Sandboxed Execution**: Strict workspace restrictions for secure tool use.
 *   ♾️ **Quota Resilience**: Auto-Provider Fallbacks seamlessly catch rate limits/quota exhaustion and instantly swap API keys mid-task without context loss.
+*   🛡️ **Session Failsafe**: Per-turn state checkpointing with automatic crash recovery. Resume any interrupted mission without data loss.
+*   📡 **Real-time SSE Uplink**: Server-Sent Events push live telemetry, activity events, and system status to Mission Control with zero polling overhead.
 *   🌍 **Universal Portability**: Single binary for x86, ARM, and RISC-V. One command to Go!
 
 | Feature                       | RDxClaw (Industrial)                      | Traditional Frameworks (Heavy)            |
@@ -218,14 +226,31 @@ Configure fallbacks in your `~/.rdxclaw/config.json` by adding a `fallbacks` arr
 
 ---
 
+## 📝 Recent Changes
+
+| Commit | Description |
+|--------|-------------|
+| `7f3f7ad` | **XSS Safety** — Escaped all raw user/event content injected into Mission Control DOM to prevent cross-site scripting. |
+| `5b0e97b` | **Server-Side Events** — Added SSE uplink (`/v1/events`) for real-time status, activity, and telemetry broadcasting to all connected clients. |
+| `dcad6ff` | **Global Session Management** — Session persistence layer with list, resume, and interrupt detection for all agent tasks. |
+| `f1828d2` | **Command Palette** — `Ctrl+Space` spotlight with navigation, theme switching, file search, and bulk agent control. |
+| `c1b096c` | **Telemetry Premium** — Three-panel latency breakdown (Last/Session/Global) with live pulse chart and stacked bar visualizer. |
+| `46444ee` | **Mission Control Overhaul** — Full Matrix-themed redesign with glassmorphism cards, CRT scanlines, typing cursors, and glitch effects. |
+| `93c0d6d` | **Panic Recovery** — Added `recover()` guards around critical Go runtime paths to prevent silent crashes. |
+| `4f91a03` | **Endpoint Restoration** — Fixed regression in file-listing and agent management endpoints after core overhaul. |
+| `1e55d18` | **Core Overhaul** — Major refactor of agent loop, swarm management, and provider rotation architecture. |
+
+---
+
 ## 🏢 Enterprise Support & Roadmap
 
 PRs welcome! RDxClaw is built for community growth and professional reliability.
 
 1. [x] Phase 1-4: Enterprise Platform Core (Done 2026-02-17)
-2. [ ] Phase 5: Voice Intelligence (Edge TTS/STT)
-3. [ ] Phase 6: Computer Vision & Edge AI
-4. [ ] Phase 7: Multi-Node Mesh Swarm Networks
+2. [x] Phase 4.5: Mission Control & Failsafe Hardening (Done 2026-04-05)
+3. [ ] Phase 5: Voice Intelligence (Edge TTS/STT)
+4. [ ] Phase 6: Computer Vision & Edge AI
+5. [ ] Phase 7: Multi-Node Mesh Swarm Networks
 
 Join the conversation: [Discord](https://discord.gg/R5Tu7p8SM2)
 
