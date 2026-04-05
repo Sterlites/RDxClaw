@@ -120,6 +120,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("GET /v1/skills", s.handleListSkills)
 	mux.HandleFunc("GET /v1/agents", s.handleListAgents)
 	mux.HandleFunc("DELETE /v1/agents/{id}", s.handleKillAgent)
+	mux.HandleFunc("GET /v1/files", s.handleListFiles)
 	mux.HandleFunc("GET /v1/files/content", s.handleGetFileContent)
 	mux.HandleFunc("POST /v1/files/save", s.handleUpdateFileContent)
 	mux.HandleFunc("GET /v1/sessions", s.handleListSessions)
@@ -632,6 +633,45 @@ func (s *Server) handleGetFileContent(w http.ResponseWriter, r *http.Request) {
 		Name:    filepath.Base(cleanPath),
 		Path:    cleanPath,
 		Content: string(content),
+	})
+}
+
+func (s *Server) handleListFiles(w http.ResponseWriter, r *http.Request) {
+	var files []FileListItem
+
+	err := filepath.Walk(s.workspace, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+
+		// Include markdown files for the documentation explorer
+		if !strings.HasSuffix(strings.ToLower(info.Name()), ".md") {
+			return nil
+		}
+
+		relPath, err := filepath.Rel(s.workspace, path)
+		if err != nil {
+			return nil
+		}
+
+		files = append(files, FileListItem{
+			Name:    info.Name(),
+			Path:    path,
+			RelPath: relPath,
+			Size:    info.Size(),
+			ModTime: info.ModTime(),
+		})
+		return nil
+	})
+
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "walk_error", fmt.Sprintf("Failed to list files: %v", err))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"files": files,
+		"count": len(files),
 	})
 }
 
