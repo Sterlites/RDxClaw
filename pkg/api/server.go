@@ -34,6 +34,8 @@ type Server struct {
 	events    []ActivityEvent
 	eventsMu  sync.RWMutex
 	workspace string
+	clients   map[chan string]bool
+	clientsMu sync.Mutex
 }
 
 // ServerConfig holds configuration for the API server.
@@ -56,6 +58,7 @@ func NewServer(agentLoop *agent.AgentLoop, msgBus *bus.MessageBus, loader *skill
 		startedAt: time.Now(),
 		version:   "1.0.0",
 		events:    make([]ActivityEvent, 0),
+		clients:   make(map[chan string]bool),
 	}
 	s.recordEvent("system", "success", "RDxClaw Mission Control initialized")
 	return s
@@ -76,6 +79,32 @@ func (s *Server) recordEvent(source, eventType, message string) {
 	s.events = append(s.events, event)
 	if len(s.events) > 50 {
 		s.events = s.events[1:]
+	}
+
+	// SSE Broadcast
+	s.broadcast("activity", event)
+}
+
+func (s *Server) broadcast(eventType string, data interface{}) {
+	s.clientsMu.Lock()
+	defer s.clientsMu.Unlock()
+
+	payload, err := json.Marshal(map[string]interface{}{
+		"type": eventType,
+		"data": data,
+	})
+	if err != nil {
+		slog.Error("failed to marshal broadcast payload", "error", err)
+		return
+	}
+
+	msg := fmt.Sprintf("event: %s\ndata: %s\n\n", eventType, string(payload))
+	for client := range s.clients {
+		select {
+		case client <- msg:
+		default:
+			// Client channel full, skip
+		}
 	}
 }
 
@@ -129,6 +158,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("POST /v1/config/recovery", s.handleUpdateRecoveryConfig)
 	mux.HandleFunc("GET /health", s.handleHealth)
 	mux.HandleFunc("GET /ready", s.handleHealth)
+	mux.HandleFunc("GET /v1/events", s.handleEvents)
 
 	// Apply middleware stack
 	var handler http.Handler = mux
@@ -147,6 +177,9 @@ func (s *Server) Start() error {
 
 	addr := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
 	slog.Info("API server starting", "addr", addr)
+
+	// Start status broadcaster
+	go s.statusBroadcaster()
 
 	srv := &http.Server{
 		Addr:              addr,
@@ -799,6 +832,122 @@ func (s *Server) handleUpdateRecoveryConfig(w http.ResponseWriter, r *http.Reque
 	
 	s.recordEvent("system", "info", fmt.Sprintf("Updated recovery config: AutoResume=%v", req.AutoResume))
 	writeJSON(w, http.StatusOK, map[string]bool{"success": true})
+}
+
+func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
+	clientChan := make(chan string, 20)
+	s.clientsMu.Lock()
+	s.clients[clientChan] = true
+	s.clientsMu.Unlock()
+
+	defer func() {
+		s.clientsMu.Lock()
+		delete(s.clients, clientChan)
+		s.clientsMu.Unlock()
+	}()
+
+	// Keep alive ticker
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	// Send initial message to establish connection
+	fmt.Fprintf(w, "event: connected\ndata: {\"timestamp\":%d}\n\n", time.Now().UnixMilli())
+	flusher.Flush()
+
+	ctx := r.Context()
+	for {
+		select {
+		case msg := <-clientChan:
+			fmt.Fprint(w, msg)
+			flusher.Flush()
+		case <-ticker.C:
+			fmt.Fprintf(w, ": keep-alive\n\n")
+			flusher.Flush()
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (s *Server) statusBroadcaster() {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		// Only broadcast if there are active clients
+		s.clientsMu.Lock()
+		hasClients := len(s.clients) > 0
+		s.clientsMu.Unlock()
+
+		if !hasClients {
+			continue
+		}
+
+		// Re-use logic from handleStatus but simplified for broadcast
+		startupInfo := s.agentLoop.GetStartupInfo()
+		
+		allSkills := s.loader.ListSkills()
+		skillNames := make([]string, len(allSkills))
+		for i, skill := range allSkills {
+			skillNames[i] = skill.Name
+		}
+
+		activeCount := 0
+		if manager := s.agentLoop.GetSwarmManager(); manager != nil {
+			activeCount = manager.CountRunning()
+		}
+		if s.agentLoop.IsRunning() {
+			activeCount++
+		}
+
+		modelName := "Default"
+		if m, ok := startupInfo["model"].(string); ok {
+			modelName = m
+		}
+
+		var m runtime.MemStats
+		runtime.ReadMemStats(&m)
+		memUsage := fmt.Sprintf("%.2f MB", float64(m.Alloc)/1024/1024)
+		numThreads, _ := runtime.ThreadCreateProfile(nil)
+
+		status := StatusResponse{
+			Status:    "ok",
+			Version:   s.version,
+			Uptime:    time.Since(s.startedAt).Round(time.Second).String(),
+			StartedAt: s.startedAt,
+			Agent: AgentStatus{
+				Model:       modelName,
+				ToolsLoaded: startupInfo["tools"].(map[string]interface{})["count"].(int),
+			},
+			Skills: SkillsStatus{
+				Total:     len(allSkills),
+				Available: len(allSkills),
+				Names:     skillNames,
+			},
+			ActiveAgents: activeCount,
+			RecentEvents: []ActivityEvent{}, // Avoid sending huge history in broadcast
+			System: SystemStats{
+				MemoryUsage: memUsage,
+				CPULoad:     0.5,
+				Goroutines:  runtime.NumGoroutine(),
+				Threads:     numThreads,
+				HeapObjects: m.HeapObjects,
+			},
+			Workspace: s.getWorkspaceStats(),
+		}
+
+		s.broadcast("status", status)
+	}
 }
 
 // --- Helpers ---

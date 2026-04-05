@@ -17,30 +17,30 @@
   <!-- Sidebar Navigation -->
   <aside>
     <div class="sidebar-header">
-      <div class="logo-icon">RDx</div>
+      <div class="logo-icon glitch-hover" data-text="RDx">RDx</div>
       <div class="sidebar-brand">
-        <h2>RDxClaw</h2>
+        <h2 class="glitch-hover" data-text="RDxClaw">RDxClaw</h2>
         <span id="sidebarVersion">AGENT_CTRL_v2.0</span>
       </div>
     </div>
     <ul class="nav-links">
       <li class="nav-item active" data-target="dashboard">
-        <span>// DASHBOARD</span>
+        <span class="glitch-hover" data-text="// DASHBOARD">// DASHBOARD</span>
       </li>
       <li class="nav-item" data-target="swarm">
-        <span>// SWARM_MGMT</span>
+        <span class="glitch-hover" data-text="// SWARM_MGMT">// SWARM_MGMT</span>
       </li>
       <li class="nav-item" data-target="skills">
-        <span>// SKILLS_LIB</span>
+        <span class="glitch-hover" data-text="// SKILLS_LIB">// SKILLS_LIB</span>
       </li>
       <li class="nav-item" data-target="chat">
-        <span>// TERMINAL</span>
+        <span class="glitch-hover" data-text="// TERMINAL">// TERMINAL</span>
       </li>
       <li class="nav-item" data-target="docs">
-        <span>// MEMORY_DOCS</span>
+        <span class="glitch-hover" data-text="// MEMORY_DOCS">// MEMORY_DOCS</span>
       </li>
       <li class="nav-item" data-target="sessions">
-        <span>// MISSION_LOGS</span>
+        <span class="glitch-hover" data-text="// MISSION_LOGS">// MISSION_LOGS</span>
       </li>
     </ul>
   </aside>
@@ -194,6 +194,9 @@
                   <div class="breakdown-item"><span>// RESP_PREP</span><span id="globalPrep">--</span></div>
                 </div>
               </div>
+            </div>
+            <div class="pulse-container">
+              <canvas id="telemetryPulse"></canvas>
             </div>
             <div class="latency-visualizer" id="latencyVisualizer">
               <!-- Animated bars/circles will be rendered here -->
@@ -349,6 +352,28 @@
     </div>
   </div>
 
+  <!-- Command Palette Overlay -->
+  <div id="commandPalette" class="overlay">
+    <div class="palette-container">
+      <div class="palette-input-wrapper">
+        <span class="palette-prefix">></span>
+        <input type="text" id="paletteInput" placeholder="TYPE_COMMAND_OR_SEARCH..." autocomplete="off">
+      </div>
+      <div id="paletteResults" class="palette-results">
+        <!-- Results will be injected here -->
+      </div>
+      <div class="palette-footer">
+        <span>UP/DOWN to navigate</span>
+        <span>ENTER to execute</span>
+        <span>ESC to close</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
   <script src="js/app.js"></script>
+  <script src="js/palette.js"></script>
 </body>
 </html>

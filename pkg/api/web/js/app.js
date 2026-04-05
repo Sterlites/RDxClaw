@@ -129,13 +129,14 @@ function randomGlitch() {
 }
 
 // Initialization
-let refreshInterval;
+let eventSource;
 document.addEventListener('DOMContentLoaded', () => {
   startMatrix();
   triggerBoot();
   randomGlitch();
   
-  loadStatus();
+  loadStatus(); // Initial paint
+  initEventSource(); // Real-time uplink
   
   // Auth Event Listeners
   document.getElementById('saveKeyBtn').onclick = () => {
@@ -148,18 +149,50 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('authOverlay').classList.remove('active');
   };
 
-  // Poll every 3 seconds
-  refreshInterval = setInterval(() => {
-    loadStatus();
-    const activeSection = document.querySelector('.section.active');
-    if (activeSection.id === 'swarm') loadAgents();
-    if (activeSection.id === 'docs') loadFiles();
-    if (activeSection.id === 'sessions') loadSessions();
-  }, 3000);
-
   // Failsafe: Check for interrupted sessions on boot
   setTimeout(checkRecovery, 2000);
 });
+
+function initEventSource() {
+  if (eventSource) eventSource.close();
+  
+  const url = new URL(`${window.location.origin}${API_BASE}/events`);
+  if (API_KEY) url.searchParams.set('api_key', API_KEY); // Or handle via cookie/header if possible
+  
+  eventSource = new EventSource(url.toString());
+  
+  eventSource.addEventListener('status', (e) => {
+    try {
+      const payload = JSON.parse(e.data);
+      renderStatus(payload.data);
+      
+      // Auto-refresh active tabs that depend on status
+      const activeSection = document.querySelector('.section.active');
+      if (activeSection.id === 'swarm') loadAgents();
+      if (activeSection.id === 'sessions') loadSessions();
+    } catch (err) {
+      console.error("Failed to parse status event:", err);
+    }
+  });
+  
+  eventSource.addEventListener('activity', (e) => {
+    try {
+      const payload = JSON.parse(e.data);
+      addActivityItem(payload.data);
+    } catch (err) {
+      console.error("Failed to parse activity event:", err);
+    }
+  });
+
+  eventSource.addEventListener('connected', (e) => {
+    console.log("Mission Control Uplink Established:", JSON.parse(e.data));
+  });
+
+  eventSource.onerror = (err) => {
+    console.warn("EventSource connection lost. Retrying...", err);
+    // EventSource handles retries automatically, but we might want to show UI state
+  };
+}
 
 // Visibility API
 document.addEventListener('visibilitychange', () => {
@@ -171,7 +204,80 @@ document.addEventListener('visibilitychange', () => {
 });
 
 
-// --- API Calls ---
+const latencies = [];
+const MAX_LATENCIES = 100;
+
+function renderPulse(newLatency) {
+    const canvas = document.getElementById('telemetryPulse');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    
+    // Resize if needed
+    const rect = canvas.parentElement.getBoundingClientRect();
+    if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) {
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        canvas.style.width = rect.width + 'px';
+        canvas.style.height = rect.height + 'px';
+    }
+
+    latencies.push(newLatency);
+    if (latencies.length > MAX_LATENCIES) latencies.shift();
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.scale(dpr, dpr);
+    
+    ctx.beginPath();
+    ctx.strokeStyle = '#39ff14';
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    
+    const step = rect.width / (MAX_LATENCIES - 1);
+    const maxVal = Math.max(...latencies, 1000);
+    const baseLine = rect.height - 10;
+
+    latencies.forEach((val, i) => {
+        const x = i * step;
+        const h = (val / maxVal) * (rect.height - 20);
+        const y = baseLine - h;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    });
+    
+    ctx.stroke();
+
+    // Fill under curve
+    ctx.lineTo((latencies.length - 1) * step, baseLine);
+    ctx.lineTo(0, baseLine);
+    ctx.fillStyle = 'rgba(0, 255, 65, 0.1)';
+    ctx.fill();
+    
+    ctx.setTransform(1,0,0,1,0,0); // Reset scale
+}
+
+function showToast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+        <div class="toast-content">
+            <span class="toast-icon">></span>
+            <span class="toast-msg">${message.toUpperCase()}</span>
+        </div>
+    `;
+
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.classList.add('out');
+        setTimeout(() => toast.remove(), 500);
+    }, 4000);
+}
+
+// Override alert with toast
+window.alert = (msg) => showToast(msg, 'error');
 
 async function fetchJSON(endpoint, options = {}) {
   try {
@@ -201,7 +307,10 @@ async function fetchJSON(endpoint, options = {}) {
 
 async function loadStatus() {
   const data = await fetchJSON(`/status?session_key=${SESSION_ID}`);
-  if (!data) return;
+  if (data) renderStatus(data);
+}
+
+function renderStatus(data) {
 
   // Real-time Clock
   const clockEl = document.getElementById('systemClock');
@@ -250,28 +359,12 @@ async function loadStatus() {
   }
 
   // Render Activity Feed
-  const activityList = document.getElementById('activityList');
-  if (activityList && data.recent_events && data.recent_events.length > 0) {
-    activityList.innerHTML = '';
-    data.recent_events.forEach(ev => {
-      const item = document.createElement('div');
-      const statusClass = `event-${(ev.type || 'info').toLowerCase()}`;
-      item.className = `activity-item ${statusClass}`;
-      
-      const time = new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      
-      item.innerHTML = `
-        <div class="activity-icon icon-${ev.source.toLowerCase()}">//</div>
-        <div class="activity-content">
-          <div class="activity-meta">
-            <span class="activity-source">[ ${ev.source} ]</span>
-            <span class="activity-time">${time}</span>
-          </div>
-          <div class="activity-msg">${ev.message}</div>
-        </div>
-      `;
-      activityList.appendChild(item);
-    });
+  if (data.recent_events && data.recent_events.length > 0) {
+    const activityList = document.getElementById('activityList');
+    if (activityList) {
+      activityList.innerHTML = '';
+      data.recent_events.forEach(ev => addActivityItem(ev, false));
+    }
   }
   // Latency Telemetry
   if (data.telemetry) {
@@ -288,6 +381,7 @@ async function loadStatus() {
       updateVal('lastPrep', formatDuration(tel.last_response.response_prepare_ms));
       
       renderLatencyVisualizer(tel.last_response);
+      renderPulse(tel.last_response.total_ms);
     }
     
     // Session Averages
@@ -311,6 +405,42 @@ async function loadStatus() {
       updateVal('globalTools', formatDuration(Math.round(tel.overall_averages.tool_exec_ms)));
       updateVal('globalPrep', formatDuration(Math.round(tel.overall_averages.response_prepare_ms)));
     }
+  }
+}
+
+function addActivityItem(ev, prepend = true) {
+  const activityList = document.getElementById('activityList');
+  if (!activityList) return;
+
+  // Remove empty state if present
+  const empty = activityList.querySelector('.empty-state');
+  if (empty) empty.remove();
+
+  const item = document.createElement('div');
+  const statusClass = `event-${(ev.type || 'info').toLowerCase()}`;
+  item.className = `activity-item ${statusClass}`;
+  
+  const time = new Date(ev.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  
+  item.innerHTML = `
+    <div class="activity-icon icon-${(ev.source || 'system').toLowerCase()}">//</div>
+    <div class="activity-content">
+      <div class="activity-meta">
+        <span class="activity-source">[ ${ev.source || 'SYSTEM'} ]</span>
+        <span class="activity-time">${time}</span>
+      </div>
+      <div class="activity-msg">${ev.message}</div>
+    </div>
+  `;
+
+  if (prepend && activityList.firstChild) {
+    activityList.insertBefore(item, activityList.firstChild);
+    // Keep only last 50
+    if (activityList.children.length > 50) {
+      activityList.lastChild.remove();
+    }
+  } else {
+    activityList.appendChild(item);
   }
 }
 
@@ -590,12 +720,46 @@ async function loadFileContent(path, el) {
 
   currentlyEditingPath = path;
   document.getElementById('currentFileName').innerText = data.name;
-  document.getElementById('fileContent').innerText = data.content;
+  
+  // Syntax Highlight if it's Go or MD
+  let content = data.content;
+  if (data.name.endsWith('.go') || data.name.endsWith('.md')) {
+      document.getElementById('fileContent').innerHTML = highlightCode(content, data.name.split('.').pop());
+  } else {
+      document.getElementById('fileContent').innerText = content;
+  }
+  
   document.getElementById('fileEditor').value = data.content;
   document.getElementById('docsControls').style.display = 'flex';
   
   const viewer = document.querySelector('.viewer-content');
   viewer.scrollTop = 0;
+}
+
+function highlightCode(code, lang) {
+    // Ultra-light regex highlighter
+    let h = code
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+
+    if (lang === 'go') {
+        const keywords = /\b(package|import|func|type|struct|interface|return|var|const|if|else|for|range|chan|go|select|case|default|map|chan|defer)\b/g;
+        const types = /\b(string|int|int64|float64|bool|error|any|interface|Map|Server|AgentLoop|MessageBus)\b/g;
+        const comments = /(\/\/.*$|\/\*[\s\S]*?\*\/)/gm;
+        const strings = /("[^"]*"|'[^']*')/g;
+
+        h = h.replace(comments, '<span class="c-comment">$1</span>');
+        h = h.replace(strings, '<span class="c-string">$1</span>');
+        h = h.replace(keywords, '<span class="c-keyword">$1</span>');
+        h = h.replace(types, '<span class="c-type">$1</span>');
+    } else if (lang === 'md') {
+        h = h.replace(/^#+ (.*)$/gm, '<span class="md-h">$0</span>');
+        h = h.replace(/`([^`]+)`/g, '<span class="md-code">$1</span>');
+        h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<span class="md-link">$1</span>');
+        h = h.replace(/^\- (.*)$/gm, '<span class="md-list">$0</span>');
+    }
+    return h;
 }
 
 function startEdit() {
