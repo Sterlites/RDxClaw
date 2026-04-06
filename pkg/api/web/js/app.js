@@ -949,7 +949,7 @@ document.addEventListener('DOMContentLoaded', () => {
 let chatMessages = [
   { 
     role: 'assistant', 
-    content: 'Hello, Commander. Embedded RDxClaw agent ready for input. How can I assist?',
+    content: 'Hello, Commander. RDxClaw is ready for input. How can I assist?',
     timestamp: new Date()
   }
 ];
