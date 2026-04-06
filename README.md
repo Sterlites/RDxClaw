@@ -18,7 +18,7 @@
 
 **RDxClaw** is a high-performance **Agentic AI Framework** engineered to deliver tangible business ROI through autonomous execution. By combining industrial-grade efficiency with enterprise-ready features, RDxClaw bridges the gap between LLM intelligence and real-world business automation—deployable anywhere from cloud servers to $10 industrial edge controllers.
 
-![Efficiency](assets/rdxclaw_mem.gif)
+![Efficiency](assets/rdxclaw_mem.png)
 
 ⚡️ **Industrial-Grade Efficiency**: Runs with <10MB RAM and 1s boot times, enabling mass-scale deployment of private, autonomous workers at 1/100th the cost of traditional AI stacks.
 
@@ -129,6 +129,10 @@ If you are developing or running from the repository:
 *   📡 **Real-time SSE Uplink**: Server-Sent Events push live telemetry, activity events, and system status to Mission Control with zero polling overhead.
 *   🌍 **Universal Portability**: Single binary for x86, ARM, and RISC-V. One command to Go!
 
+<p align="center">
+  <img src="assets/compare.jpg" alt="RDxClaw Performance Comparison Infographic" width="800">
+</p>
+
 | Feature                       | RDxClaw (Industrial)                      | Traditional Frameworks (Heavy)            |
 | ----------------------------- | ----------------------------------------- | ----------------------------------------- |
 | **Language**                  | **Go** (High Concurrency)                 | Python/JS (High Overhead)                 |
@@ -144,7 +148,7 @@ If you are developing or running from the repository:
 
 | 🧩 Full-Stack Engineer | 🗂️ Knowledge Memory | 🔎 Market Research |
 | :---: | :---: | :---: |
-| <img src="assets/rdxclaw_code.gif" width="260"> | <img src="assets/rdxclaw_memory.gif" width="260"> | <img src="assets/rdxclaw_search.gif" width="260"> |
+| <img src="assets/rdxclaw_code.png" width="260" alt="Full-Stack Engineer Visualization"> | <img src="assets/rdxclaw_memory.png" width="260" alt="Knowledge Memory Visualization"> | <img src="assets/rdxclaw_search.png" width="260" alt="Market Research Visualization"> |
 | <sub>Code • Deploy • Scale</sub> | <sub>RAG • Context • Learn</sub> | <sub>Search • Filter • Summarize</sub> |
 
 </div>
@@ -185,6 +189,10 @@ RDxClaw organizes intelligence into a structured workspace:
 - `sessions/`: Contextual history and audit trails.
 - `memory/`: Long-term RAG knowledge base.
 - `skills/`: Installed capabilities and specialized agents.
+
+<p align="center">
+  <img src="assets/arch.jpg" alt="RDxClaw Industrial System Architecture" width="800">
+</p>
 
 ---
 
