@@ -126,6 +126,8 @@ If you are developing or running from the repository:
 *   🔒 **Sandboxed Execution**: Strict workspace restrictions for secure tool use.
 *   ♾️ **Quota Resilience**: Auto-Provider Fallbacks seamlessly catch rate limits/quota exhaustion and instantly swap API keys mid-task without context loss.
 *   🛡️ **Session Failsafe**: Per-turn state checkpointing with automatic crash recovery. Resume any interrupted mission without data loss.
+*   🔄 **Zero-Downtime Upgrades**: Graceful binary handoff (SIGUSR2) ensures active LLM calls (up to 35 min) and swarm tasks complete safely during CI/CD deployments.
+*   🔥 **Live Hot-Reload**: Edit skills, memory, and config files on the fly. `fsnotify` live-reloads context without restarting the agent process.
 *   📡 **Real-time SSE Uplink**: Server-Sent Events push live telemetry, activity events, and system status to Mission Control with zero polling overhead.
 *   🌍 **Universal Portability**: Single binary for x86, ARM, and RISC-V. One command to Go!
 
@@ -238,6 +240,7 @@ Configure fallbacks in your `~/.rdxclaw/config.json` by adding a `fallbacks` arr
 
 | Commit | Description |
 |--------|-------------|
+| `HEAD` | **Zero-Downtime Hot-Reload** — Graceful process handoff via `tableflip` + `SIGUSR2`, drain-aware loops, and `fsnotify` file watching for live capability injection. CI pipeline updated to block broken deploys. |
 | `7f3f7ad` | **XSS Safety** — Escaped all raw user/event content injected into Mission Control DOM to prevent cross-site scripting. |
 | `5b0e97b` | **Server-Side Events** — Added SSE uplink (`/v1/events`) for real-time status, activity, and telemetry broadcasting to all connected clients. |
 | `dcad6ff` | **Global Session Management** — Session persistence layer with list, resume, and interrupt detection for all agent tasks. |
