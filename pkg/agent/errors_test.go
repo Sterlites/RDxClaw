@@ -27,7 +27,7 @@ func TestErrorClassification(t *testing.T) {
 		// Rate limit
 		{"rate limit", fmt.Errorf("rate limit exceeded"), ErrRateLimit},
 		{"429 status", fmt.Errorf("API returned 429: too many requests"), ErrRateLimit},
-		{"quota exceeded", fmt.Errorf("quota exceeded for this billing period"), ErrRateLimit},
+		{"quota exceeded", fmt.Errorf("quota exceeded for this billing period"), ErrQuotaExceeded},
 		{"throttled", fmt.Errorf("request was throttled"), ErrRateLimit},
 
 		// Timeout

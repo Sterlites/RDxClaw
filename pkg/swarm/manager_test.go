@@ -68,6 +68,9 @@ func TestManager_Lifecycle(t *testing.T) {
 	assert.Equal(t, "completed", agent.Status)
 	assert.Equal(t, "Task complete.", agent.Result)
 	assert.True(t, agent.Finished > 0)
+
+	// Allow goroutine I/O to flush completely before TempDir cleanup
+	time.Sleep(200 * time.Millisecond)
 }
 
 func TestManager_Kill(t *testing.T) {
@@ -89,6 +92,9 @@ func TestManager_Kill(t *testing.T) {
 
 	agent, _ := manager.GetAgent(agentID)
 	assert.Equal(t, "cancelled", agent.Status)
+
+	// Allow goroutine I/O to flush completely before TempDir cleanup
+	time.Sleep(200 * time.Millisecond)
 }
 
 // FailingMockProvider always returns an error (simulates 504 Gateway Timeout)
@@ -151,6 +157,9 @@ func TestManager_SpawnWithError(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("Callback was not called within timeout")
 	}
+
+	// Allow goroutine I/O to flush completely before TempDir cleanup
+	time.Sleep(200 * time.Millisecond)
 }
 
 // PanickingMockProvider panics during Chat (simulates unexpected crash)
@@ -217,4 +226,7 @@ func TestManager_PanicRecovery(t *testing.T) {
 	msg2, err2 := manager.Spawn(ctx, "Post-panic task", "survivor", "ch", "chat", nil)
 	assert.NoError(t, err2)
 	assert.Contains(t, msg2, "Spawned agent 'survivor'")
+
+	// Allow goroutine I/O to flush completely before TempDir cleanup
+	time.Sleep(200 * time.Millisecond)
 }
