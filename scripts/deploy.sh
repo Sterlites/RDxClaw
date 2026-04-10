@@ -94,13 +94,52 @@ if use_systemd; then
     write_service_file
     run_systemctl daemon-reload
     run_systemctl enable "$SERVICE_NAME"
-    run_systemctl restart "$SERVICE_NAME"
-    echo "✅ systemd service $SERVICE_NAME restarted"
+
+    # Graceful upgrade: send SIGUSR2 to the running process instead of restarting
+    PID=$(run_systemctl show -p MainPID --value "$SERVICE_NAME" 2>/dev/null || echo "0")
+    if [ -n "$PID" ] && [ "$PID" != "0" ]; then
+        echo "🔄 Sending graceful upgrade signal (SIGUSR2) to PID $PID..."
+        kill -USR2 "$PID" 2>/dev/null || true
+
+        # Wait for handoff to complete (the new process inherits the sockets)
+        echo "⏳ Waiting for binary handoff..."
+        MAX_HANDOFF_WAIT=15
+        HANDOFF_COUNT=0
+        while [ $HANDOFF_COUNT -lt $MAX_HANDOFF_WAIT ]; do
+            NEW_PID=$(run_systemctl show -p MainPID --value "$SERVICE_NAME" 2>/dev/null || echo "0")
+            if [ "$NEW_PID" != "$PID" ] && [ "$NEW_PID" != "0" ]; then
+                echo "✅ Binary handoff complete (old PID: $PID → new PID: $NEW_PID)"
+                break
+            fi
+            HANDOFF_COUNT=$((HANDOFF_COUNT+1))
+            sleep 1
+        done
+
+        if [ $HANDOFF_COUNT -ge $MAX_HANDOFF_WAIT ]; then
+            echo "⚠️  Handoff timeout — falling back to restart"
+            run_systemctl restart "$SERVICE_NAME"
+        fi
+    else
+        echo "⚠️  No running process found — starting fresh"
+        run_systemctl start "$SERVICE_NAME"
+    fi
+    echo "✅ systemd service $SERVICE_NAME updated"
     USING_SYSTEMD=true
 else
     echo "⚠️  Systemd unavailable or no sudo access — falling back to nohup..."
-    pkill -f "$APP_NAME server" 2>/dev/null || true
-    sleep 1
+    # For nohup mode, send SIGUSR2 if a process is running
+    OLD_PID=$(pgrep -f "$APP_NAME server" 2>/dev/null || echo "")
+    if [ -n "$OLD_PID" ]; then
+        echo "🔄 Sending graceful upgrade signal (SIGUSR2) to PID $OLD_PID..."
+        kill -USR2 "$OLD_PID" 2>/dev/null || true
+        sleep 5
+        # Check if old process exited
+        if kill -0 "$OLD_PID" 2>/dev/null; then
+            echo "⚠️  Old process still running — force killing"
+            kill -9 "$OLD_PID" 2>/dev/null || true
+            sleep 1
+        fi
+    fi
     nohup "$BINARY_PATH" server --port "$PORT" > "$LOG_FILE" 2>&1 &
     NOHUP_PID=$!
     echo "✅ Process started in background (PID: $NOHUP_PID)"

@@ -312,3 +312,75 @@ func (sm *Manager) KillAgent(id string) error {
 	sm.save()
 	return nil
 }
+
+// DrainAndWait waits for all running subagent tasks to complete, up to the
+// given timeout. After the timeout, any still-running tasks are marked as
+// "interrupted" so the new process can detect and notify users.
+// Returns the number of tasks that were still running when the timeout hit.
+func (sm *Manager) DrainAndWait(timeout time.Duration) int {
+	// Snapshot running task IDs
+	sm.mu.RLock()
+	var runningIDs []string
+	for id, t := range sm.tasks {
+		if t.Status == "running" {
+			runningIDs = append(runningIDs, id)
+		}
+	}
+	sm.mu.RUnlock()
+
+	if len(runningIDs) == 0 {
+		return 0
+	}
+
+	fmt.Printf("[swarm] Draining %d running task(s)...\n", len(runningIDs))
+
+	// Poll until all tasks complete or timeout
+	deadline := time.After(timeout)
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-deadline:
+			// Timeout hit — mark remaining running tasks as interrupted
+			sm.mu.Lock()
+			interrupted := 0
+			for _, id := range runningIDs {
+				if t, ok := sm.tasks[id]; ok && t.Status == "running" {
+					t.Status = "interrupted"
+					t.Result = "Interrupted by graceful upgrade"
+					t.Finished = time.Now().UnixMilli()
+					interrupted++
+				}
+			}
+			sm.save()
+			sm.mu.Unlock()
+			fmt.Printf("[swarm] Drain timeout: %d task(s) interrupted\n", interrupted)
+			return interrupted
+
+		case <-ticker.C:
+			sm.mu.RLock()
+			stillRunning := 0
+			for _, id := range runningIDs {
+				if t, ok := sm.tasks[id]; ok && t.Status == "running" {
+					stillRunning++
+				}
+			}
+			sm.mu.RUnlock()
+
+			if stillRunning == 0 {
+				fmt.Println("[swarm] All tasks drained successfully")
+				return 0
+			}
+		}
+	}
+}
+
+// FlushState persists the current task state to disk.
+// Called during graceful drain to ensure no state is lost.
+func (sm *Manager) FlushState() {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	sm.save()
+}
+

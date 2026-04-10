@@ -32,6 +32,8 @@ import (
 	"github.com/Sterlites/RDxClaw/pkg/devices"
 	"github.com/Sterlites/RDxClaw/pkg/health"
 	"github.com/Sterlites/RDxClaw/pkg/heartbeat"
+	"github.com/Sterlites/RDxClaw/pkg/hotreload"
+	"github.com/Sterlites/RDxClaw/pkg/lifecycle"
 	"github.com/Sterlites/RDxClaw/pkg/logger"
 	"github.com/Sterlites/RDxClaw/pkg/migrate"
 	"github.com/Sterlites/RDxClaw/pkg/providers"
@@ -888,7 +890,6 @@ func serverCmd() {
 	}
 
 	// Override config with flags if provided
-	// (Simple argument parsing for now, could be improved with flag package)
 	for i := 0; i < len(args); i++ {
 		if args[i] == "--port" && i+1 < len(args) {
 			if _, err := fmt.Sscanf(args[i+1], "%d", &cfg.API.Port); err != nil {
@@ -922,8 +923,20 @@ func serverCmd() {
 		os.Exit(1)
 	}
 
+	// ─── Lifecycle Manager (zero-downtime upgrades) ─────────────────────
+	lcm, err := lifecycle.NewManager("")
+	if err != nil {
+		fmt.Printf("Warning: lifecycle manager init failed (graceful upgrade disabled): %v\n", err)
+		// Continue without lifecycle support — fallback to hard restart
+	}
+
 	msgBus := bus.NewMessageBus()
 	agentLoop := agent.NewAgentLoop(cfg, msgBus, provider)
+
+	// Attach lifecycle manager to agent loop for drain-awareness
+	if lcm != nil {
+		agentLoop.SetLifecycleManager(lcm)
+	}
 
 	// Initialize skills loader
 	workspace := cfg.WorkspacePath()
@@ -942,7 +955,6 @@ func serverCmd() {
 		cfg.Heartbeat.Enabled,
 	)
 	heartbeatService.SetBus(msgBus)
-	// Heartbeat for server uses internal processing
 	heartbeatService.SetHandler(func(prompt, channel, chatID string) *tools.ToolResult {
 		response, err := agentLoop.ProcessHeartbeat(context.Background(), prompt, "server", "heartbeat")
 		if err != nil {
@@ -982,17 +994,110 @@ func serverCmd() {
 	defer cancel()
 	go agentLoop.Run(ctx)
 
-	// Setup graceful shutdown
+	// ─── Hot-Reload: watch workspace files for live changes ─────────────
+	hotReloader := hotreload.NewWatcher(hotreload.DefaultDebounce)
+
+	// Watch skills directory for new/updated skills
+	skillsDir := filepath.Join(workspace, "skills")
+	hotReloader.AddRule(hotreload.WatchRule{
+		Path:       skillsDir,
+		Recursive:  true,
+		Extensions: []string{".md"},
+		Label:      "Skills",
+		Callback: func(_ string) {
+			fmt.Println("[hotreload] Skills changed — context will refresh on next request")
+		},
+	})
+
+	// Watch bootstrap/prompt files (AGENTS.md, SOUL.md, USER.md, IDENTITY.md)
+	for _, filename := range []string{"AGENTS.md", "SOUL.md", "USER.md", "IDENTITY.md"} {
+		filePath := filepath.Join(workspace, filename)
+		hotReloader.AddRule(hotreload.WatchRule{
+			Path:  filePath,
+			Label: "Bootstrap: " + filename,
+			Callback: func(changed string) {
+				fmt.Printf("[hotreload] %s changed — context will refresh on next request\n", filepath.Base(changed))
+			},
+		})
+	}
+
+	// Watch memory directory
+	memoryDir := filepath.Join(workspace, "memory")
+	hotReloader.AddRule(hotreload.WatchRule{
+		Path:       memoryDir,
+		Recursive:  true,
+		Extensions: []string{".md"},
+		Label:      "Memory",
+		Callback: func(_ string) {
+			fmt.Println("[hotreload] Memory files changed — context will refresh on next request")
+		},
+	})
+
 	go func() {
-		sigChan := make(chan os.Signal, 1)
-		signal.Notify(sigChan, os.Interrupt)
-		<-sigChan
-		fmt.Println("\nShutting down...")
-		cronService.Stop()
-		heartbeatService.Stop()
-		agentLoop.Stop()
-		os.Exit(0)
+		if err := hotReloader.Start(); err != nil {
+			fmt.Printf("Warning: hot-reload watcher failed: %v\n", err)
+		}
 	}()
+	fmt.Println("✓ Hot-reload watcher started")
+
+	// ─── Lifecycle: register drain hooks ────────────────────────────────
+	if lcm != nil {
+		// Register drain hooks — these run when SIGUSR2 triggers an upgrade
+		lcm.RegisterDrainHook(func() {
+			fmt.Println("[drain] Stopping heartbeat and cron services...")
+			heartbeatService.Stop()
+			cronService.Stop()
+			hotReloader.Stop()
+		})
+
+		lcm.RegisterDrainHook(func() {
+			fmt.Println("[drain] Waiting for agent loop to drain...")
+			agentLoop.DrainAndWait(lifecycle.DefaultDrainTimeout)
+		})
+
+		lcm.RegisterDrainHook(func() {
+			fmt.Println("[drain] Draining swarm tasks...")
+			if sm := agentLoop.GetSwarmManager(); sm != nil {
+				sm.DrainAndWait(lifecycle.DefaultDrainTimeout)
+			}
+		})
+
+		lcm.RegisterDrainHook(func() {
+			fmt.Println("[drain] Flushing all state to disk...")
+			agentLoop.FlushAllState()
+		})
+
+		// Signal that this process is ready to accept traffic
+		if err := lcm.Ready(); err != nil {
+			fmt.Printf("Warning: lifecycle Ready() failed: %v\n", err)
+		}
+		fmt.Println("✓ Lifecycle manager ready (SIGUSR2 = graceful upgrade)")
+
+		// Notify users about any sessions interrupted by a previous upgrade
+		go agentLoop.NotifyInterruptedSessions()
+
+		// Wait for upgrade signal or shutdown in background
+		go func() {
+			lcm.WaitForUpgradeAndDrain()
+			cancel()
+			agentLoop.Stop()
+			os.Exit(0)
+		}()
+	} else {
+		// Fallback: simple signal-based shutdown (no graceful upgrade)
+		go func() {
+			sigChan := make(chan os.Signal, 1)
+			signal.Notify(sigChan, os.Interrupt)
+			<-sigChan
+			fmt.Println("\nShutting down...")
+			agentLoop.FlushAllState()
+			cronService.Stop()
+			heartbeatService.Stop()
+			hotReloader.Stop()
+			agentLoop.Stop()
+			os.Exit(0)
+		}()
+	}
 
 	// Start server (blocks)
 	if err := srv.Start(); err != nil {

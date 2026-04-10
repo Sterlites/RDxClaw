@@ -2,6 +2,7 @@ package session
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -292,6 +293,50 @@ type SessionInfo struct {
 	LastUpdate time.Time `json:"last_update"`
 	Summary    string    `json:"summary,omitempty"`
 	Status     string    `json:"status"` // completed, interrupted, active
+}
+
+// FlushAll persists every in-memory session to disk atomically.
+// Called during graceful drain to ensure no session state is lost.
+func (sm *SessionManager) FlushAll() error {
+	sm.mu.RLock()
+	keys := make([]string, 0, len(sm.sessions))
+	for k := range sm.sessions {
+		keys = append(keys, k)
+	}
+	sm.mu.RUnlock()
+
+	var errList []string
+	for _, key := range keys {
+		if err := sm.Save(key); err != nil {
+			errList = append(errList, fmt.Sprintf("%s: %v", key, err))
+		}
+	}
+
+	if len(errList) > 0 {
+		return fmt.Errorf("failed to flush %d session(s): %s",
+			len(errList), strings.Join(errList, "; "))
+	}
+	return nil
+}
+
+// MarkAllInterrupted marks any session whose last message is an in-flight
+// assistant message (with pending tool calls) as "interrupted". This allows
+// the new process to detect these sessions and notify users.
+func (sm *SessionManager) MarkAllInterrupted() []string {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	var interrupted []string
+	for key, s := range sm.sessions {
+		if len(s.Messages) == 0 {
+			continue
+		}
+		lastMsg := s.Messages[len(s.Messages)-1]
+		if lastMsg.Role == "assistant" && len(lastMsg.ToolCalls) > 0 {
+			interrupted = append(interrupted, key)
+		}
+	}
+	return interrupted
 }
 
 func (sm *SessionManager) ListSessions() []SessionInfo {

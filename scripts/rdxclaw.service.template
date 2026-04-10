@@ -8,11 +8,17 @@ User={{USER}}
 WorkingDirectory={{HOME}}
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart={{HOME}}/rdxclaw server --port {{PORT}}
+# Graceful binary upgrade: send SIGUSR2 to trigger zero-downtime handoff
+ExecReload=/bin/kill -USR2 $MAINPID
 Restart=always
 RestartSec=5
 StartLimitIntervalSec=0
+# 2200s = ~36.7 minutes, longer than the 35-minute drain timeout
+# to allow in-flight LLM calls (up to 30 min) to complete
+TimeoutStopSec=2200
 StandardOutput=append:{{HOME}}/rdxclaw.log
 StandardError=append:{{HOME}}/rdxclaw.log
 
 [Install]
 WantedBy=multi-user.target
+

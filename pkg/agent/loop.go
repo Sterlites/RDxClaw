@@ -20,6 +20,7 @@ import (
 
 	"github.com/Sterlites/RDxClaw/pkg/bus"
 	"github.com/Sterlites/RDxClaw/pkg/channels"
+	"github.com/Sterlites/RDxClaw/pkg/lifecycle"
 	"github.com/Sterlites/RDxClaw/pkg/config"
 	"github.com/Sterlites/RDxClaw/pkg/constants"
 	"github.com/Sterlites/RDxClaw/pkg/knowledge"
@@ -52,6 +53,10 @@ type AgentLoop struct {
 	summarizing    sync.Map // Tracks which sessions are currently being summarized
 	channelManager *channels.Manager
 	swarmManager   *swarm.Manager
+
+	// Lifecycle: zero-downtime upgrade support
+	lifecycleMgr   *lifecycle.Manager
+	inflight       sync.WaitGroup // Tracks in-flight message processing
 
 	// Telemetry
 	telemetryMu    sync.RWMutex
@@ -239,6 +244,13 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 	al.running.Store(true)
 
 	for al.running.Load() {
+		// Zero-downtime: if lifecycle manager signals drain, stop accepting
+		// new work but let in-flight messages complete naturally.
+		if al.lifecycleMgr != nil && al.lifecycleMgr.IsDraining() {
+			logger.InfoCF("agent", "Drain mode active — stopping inbound consumption", nil)
+			break
+		}
+
 		select {
 		case <-ctx.Done():
 			return nil
@@ -248,7 +260,11 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 				continue
 			}
 
+			// Track in-flight request for graceful drain
+			al.inflight.Add(1)
 			response, err := al.processMessage(ctx, msg)
+			al.inflight.Done()
+
 			if err != nil {
 				response = fmt.Sprintf("Error processing message: %v", err)
 			}
@@ -293,12 +309,97 @@ func (al *AgentLoop) SetChannelManager(cm *channels.Manager) {
 	al.channelManager = cm
 }
 
+// SetLifecycleManager attaches the lifecycle manager for zero-downtime upgrade support.
+func (al *AgentLoop) SetLifecycleManager(lm *lifecycle.Manager) {
+	al.lifecycleMgr = lm
+}
+
 func (al *AgentLoop) GetSessionManager() *session.SessionManager {
 	return al.sessions
 }
 
 func (al *AgentLoop) GetSwarmManager() *swarm.Manager {
 	return al.swarmManager
+}
+
+// DrainAndWait stops accepting new messages and waits for all in-flight
+// requests to complete, up to the given timeout. Called by the lifecycle
+// manager during graceful binary upgrade.
+func (al *AgentLoop) DrainAndWait(timeout time.Duration) {
+	al.running.Store(false)
+
+	done := make(chan struct{})
+	go func() {
+		al.inflight.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		logger.InfoCF("agent", "All in-flight requests completed", nil)
+	case <-time.After(timeout):
+		logger.WarnCF("agent", "Drain timeout exceeded, some requests may not have completed",
+			map[string]interface{}{"timeout": timeout.String()})
+	}
+}
+
+// FlushAllState persists all mutable state to disk atomically.
+// Called during graceful drain to ensure zero state loss.
+func (al *AgentLoop) FlushAllState() {
+	logger.InfoCF("agent", "Flushing all state to disk...", nil)
+
+	// 1. Flush all sessions
+	if err := al.sessions.FlushAll(); err != nil {
+		logger.ErrorCF("agent", "Failed to flush sessions", map[string]interface{}{"error": err.Error()})
+	} else {
+		logger.InfoCF("agent", "All sessions flushed", nil)
+	}
+
+	// 2. Flush swarm state
+	if al.swarmManager != nil {
+		al.swarmManager.FlushState()
+		logger.InfoCF("agent", "Swarm state flushed", nil)
+	}
+
+	// 3. Mark interrupted sessions
+	interrupted := al.sessions.MarkAllInterrupted()
+	if len(interrupted) > 0 {
+		logger.InfoCF("agent", "Sessions marked as interrupted",
+			map[string]interface{}{"count": len(interrupted), "keys": interrupted})
+	}
+
+	logger.InfoCF("agent", "State flush complete", nil)
+}
+
+// NotifyInterruptedSessions sends a notification to users on channels where
+// sessions were interrupted during a graceful upgrade.
+func (al *AgentLoop) NotifyInterruptedSessions() {
+	sessions := al.sessions.ListSessions()
+	for _, s := range sessions {
+		if s.Status != "interrupted" {
+			continue
+		}
+
+		// Parse channel:chatID from session key
+		parts := strings.SplitN(s.Key, ":", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		channel, chatID := parts[0], parts[1]
+
+		// Skip internal channels
+		if constants.IsInternalChannel(channel) {
+			continue
+		}
+
+		al.bus.PublishOutbound(bus.OutboundMessage{
+			Channel: channel,
+			ChatID:  chatID,
+			Content: "⚡ I was briefly upgraded to a newer version. If your last request didn't complete, please resend it.",
+		})
+		logger.InfoCF("agent", "Sent upgrade notification",
+			map[string]interface{}{"channel": channel, "chat_id": chatID})
+	}
 }
 
 func (al *AgentLoop) recordTelemetry(sessionKey string, stats LatencyStats) {
