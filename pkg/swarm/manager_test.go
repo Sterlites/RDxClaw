@@ -37,7 +37,7 @@ func (m *MockProvider) EstimateTokens(messages []providers.Message) int {
 func TestManager_Lifecycle(t *testing.T) {
 	msgBus := bus.NewMessageBus()
 	provider := &MockProvider{Response: "Task complete."}
-	manager := NewManager(provider, "test-model", "/tmp", msgBus)
+	manager := NewManager(provider, "test-model", t.TempDir(), msgBus)
 
 	ctx := context.Background()
 
@@ -74,7 +74,7 @@ func TestManager_Kill(t *testing.T) {
 	msgBus := bus.NewMessageBus()
 	// Slow provider to simulate long running task
 	provider := &MockProvider{Response: "Done"}
-	manager := NewManager(provider, "test-model", "/tmp", msgBus)
+	manager := NewManager(provider, "test-model", t.TempDir(), msgBus)
 
 	// We can't easily wait for it to be mid-execution with a simple mock without channels
 	// but we can test the status transition.
@@ -111,7 +111,7 @@ func (m *FailingMockProvider) EstimateTokens(messages []providers.Message) int {
 func TestManager_SpawnWithError(t *testing.T) {
 	msgBus := bus.NewMessageBus()
 	provider := &FailingMockProvider{}
-	manager := NewManager(provider, "test-model", "/tmp", msgBus)
+	manager := NewManager(provider, "test-model", t.TempDir(), msgBus)
 
 	ctx := context.Background()
 
@@ -173,7 +173,7 @@ func (m *PanickingMockProvider) EstimateTokens(messages []providers.Message) int
 func TestManager_PanicRecovery(t *testing.T) {
 	msgBus := bus.NewMessageBus()
 	provider := &PanickingMockProvider{}
-	manager := NewManager(provider, "test-model", "/tmp", msgBus)
+	manager := NewManager(provider, "test-model", t.TempDir(), msgBus)
 
 	ctx := context.Background()
 
