@@ -149,7 +149,7 @@ If you are developing or running from the repository:
 
 | 🧩 Full-Stack Engineer | 🗂️ Knowledge Memory | 🔎 Market Research |
 | :---: | :---: | :---: |
-| <img src="assets/rdxclaw_code.gif" width="260" alt="Full-Stack Engineer Visualization"> | <img src="assets/rdxclaw_memory.gif" width="260" alt="Knowledge Memory Visualization"> | <img src="assets/rdxclaw_search.gif" width="260" alt="Market Research Visualization"> |
+| <img src="assets/rdxclaw_code.png" width="260" alt="Full-Stack Engineer Visualization"> | <img src="assets/rdxclaw_memory.png" width="260" alt="Knowledge Memory Visualization"> | <img src="assets/rdxclaw_search.png" width="260" alt="Market Research Visualization"> |
 | <sub>Code • Deploy • Scale</sub> | <sub>RAG • Context • Learn</sub> | <sub>Search • Filter • Summarize</sub> |
 
 </div>
